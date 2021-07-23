@@ -11,7 +11,7 @@
 ################################################################################
 
 # Load all the required packages
-#install.packages('utils')
+install.packages('')
 
 library(sp)
 library(raster)
@@ -38,5 +38,9 @@ library(utils)
 
 # 1. Load and prepare the data
 # a.1) Distrito Nacional's boundary
+test <- st_read("https://github.com/francicabrera/GISassessment/blob/456328fe369c37a3eb910b7f49687379cc047818/Data/geo/ResponseZones/SALUD_DN.shp")
+  
+  
 
+#https://github.com/francicabrera/GISassessment/blob/456328fe369c37a3eb910b7f49687379cc047818/Data/geo/ResponseZones/SALUD_DN.shp
 
