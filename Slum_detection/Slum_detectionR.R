@@ -122,15 +122,29 @@ names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR')
 # C3' mosaic
 names(mosaic_C3) <- c('blue', 'green', 'red', 'NIR')
 
+# Plot the data in true colours and false composite.
+# true colour composite
+rC_rgb <- stack(mosaic_C3$red, mosaic_C3$green, mosaic_C3$blue) %>% 
+  plotRGB(.,axes=TRUE, stretch="lin")
+# false colour composite
+rC_false <- stack(mosaic_C3$NIR, mosaic_C3$red, mosaic_C3$green) %>% 
+  plotRGB(.,axes=TRUE, stretch="lin")
 
+# Check the similarity between bands
+# set the plot window size (2 by 2)
+par(mfrow = c(2,2))
+# plot the bands - Mosaic C
+plot(mosaic_C3$blue, main = "Blue")
+plot(mosaic_C3$green, main = "Green")
+plot(mosaic_C3$red, main = "Red")
+plot(mosaic_C3$NIR, main = "NIR")
 
-
-
-
-
-
-
-
+# Statistics of these bands
+# Mosaic C3
+mosaic_C3 %>%
+  as.data.frame(., na.rm=TRUE) %>%
+  sample_n(., 100) %>%
+  ggpairs(.,axisLabels="none")
 
 
 
