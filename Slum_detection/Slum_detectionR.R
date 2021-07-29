@@ -146,6 +146,29 @@ mosaic_C3 %>%
   sample_n(., 100) %>%
   ggpairs(.,axisLabels="none")
 
+# Training data 2
+# The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
+# The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
+# Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225,
+# the classification follows six classes:
+# 1 - Informal settlements Type I: defined roads
+# 2 - Informal settlements Type II: undefined roads
+# 3 - Informal settlements Type II: undefined roads and located in hazardous areas
+# 4 - Formal settlements (all built up areas)
+# 5 - Non-settlemets (vegetation, bare ground, water, grassland, parking lots, sport courts)
+# 6 - Roads
+
+# Read training points, the following code assumes that it contains only the class attribute
+# in readOGR, dsn specifies the path to the folder containing the file (may not end with /), 
+# layer specifies the name of the shapefile without extension (.shp)
+trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>% 
+  # Project to EPSG:32619.
+  st_transform(.,32619)
+# Quick look of the feature
+qtm(trainC3)
+crs(trainC3) # Check crs
+
+
 
 
 
