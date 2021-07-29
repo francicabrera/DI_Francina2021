@@ -168,6 +168,140 @@ trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>%
 qtm(trainC3)
 crs(trainC3) # Check crs
 
+# Extract image values at training point locations
+trainC3.sr <- raster::extract(mosaic_C3, trainC3, sp=T)
+
+# Convert to data.frame and convert classID into factor
+trainC3.df <- as.data.frame(trainC3.sr)
+trainC3.df$classID <- as.factor(trainC3.df$classID)
+
+# Create boxplots of reflectance grouped by land cover class
+# Melt dataframe containing point id, classID, and 6 spectral bands
+spectra.df <- melt(trainC3.df, id.vars='classID', 
+                    measure.vars=c('blue', 'green', 'red', 'NIR'))
+
+# Create boxplots of spectral bands per class
+ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
+  geom_boxplot() +
+  theme_bw()
+
+# Create 2D scatterplot of image data and locations of training points
+
+# Convert image to data.frame and remove missing values
+sr.C3.val <- data.frame(getValues(mosaic_C3))
+sr.C3.val <- na.omit(sr.C3.val)
+
+# Randomly sub-sample 1000 to speed up visualisation
+sr.C3.val <- sr.C3.val[sample(nrow(sr.C3.val), 1000),]  
+
+# Specify which bands to use for the x and y axis of the plot - Red band
+xband <- "red"
+yband <- "NIR"
+
+# Create plot of band value density and training data
+ggplot() + 
+  geom_hex(data = sr.C3.val, aes(x = get(xband), y = get(yband)), bins = 100) + 
+  geom_point(data = trainC3.df, aes(x = get(xband), y = get(yband), color=classID, shape=classID), 
+             size = 2, inherit.aes = FALSE, alpha=1) + 
+  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+  scale_x_continuous(xband, limits=c(-10, quantile(sr.C3.val[xband], 0.98, na.rm=T))) +
+  scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
+  scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
+  theme_bw()
+
+# Specify which bands to use for the x and y axis of the plot - Blue band
+xband2 <- "blue"
+
+# Create plot of band value density and training data
+ggplot() + 
+  geom_hex(data = sr.C3.val, aes(x = get(xband2), y = get(yband)), bins = 100) + 
+  geom_point(data = trainC3.df, aes(x = get(xband2), y = get(yband), color=classID, shape=classID), 
+             size = 2, inherit.aes = FALSE, alpha=1) + 
+  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+  scale_x_continuous(xband2, limits=c(-10, quantile(sr.C3.val[xband2], 0.98, na.rm=T))) +
+  scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
+  scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
+  theme_bw()
+
+# Specify which bands to use for the x and y axis of the plot - Green band
+xband3 <- "green"
+
+# Create plot of band value density and training data
+ggplot() + 
+  geom_hex(data = sr.C3.val, aes(x = get(xband3), y = get(yband)), bins = 100) + 
+  geom_point(data = trainC3.df, aes(x = get(xband3), y = get(yband), color=classID, shape=classID), 
+             size = 2, inherit.aes = FALSE, alpha=1) + 
+  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+  scale_x_continuous(xband3, limits=c(-10, quantile(sr.C3.val[xband3], 0.98, na.rm=T))) +
+  scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
+  scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
+  theme_bw()
+
+
+# Machine learning model: Random Forest
+# The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
+# Training data (dataframe): trainC3.df
+# stack: mosaic_C3
+
+# the randomForest() function expects the dependent variable to be of type factor.
+# Use as.factor() for conversion of the classID column.
+trainC3.df$classID <- as.factor(trainC3.df$classID)
+str(trainC3.df) #allows you to see the classes of the variables (all numeric)
+
+# Include only useful predictors in the model.
+trainC3_df <- select(trainC3.df, -c("id", "class_name","circ_num","coords.x1","coords.x2")) 
+# The RF algorithm cannot deal with NoData (NA) values. Remove NAs from the data.frame.
+is.na(trainC3_df) # check for null values
+sum(is.na(trainC3_df)) # check how many null values there are
+trainC3_df <- na.omit(trainC3_df)
+sum(is.na(trainC3_df))
+
+# Train a randomForest() classification model with the data.frame created in the prior step. 
+# The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
+# 1. Set a portion of the data aside for testing
+sample <- sample.split(trainC3_df$classID, SplitRatio = .80)
+train <- subset(trainC3_df, sample == TRUE)
+test <- subset(trainC3_df, sample == FALSE)
+dim(train)
+dim(test)
+
+# 2. Model
+RF_modelC3 <- randomForest(classID ~ ., data = train, ntree=2500)
+
+# 3. Model performance
+print(RF_modelC3)
+RF_modelC3$err.rate[,1] # OOB estimate of  error rate
+
+# 4. Variable importance
+varImpPlot(RF_modelC3, sort=TRUE, main='Variable importance')
+
+# Red band
+partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
+partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
+partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
+
+# 4. Perform a classification of the image stack using the predict() function. 
+# The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
+# Run predict() to store RF predictions
+map <- predict(mosaic_C3, RF_modelC3)
+#map2 <- predict(mosaic_DN, RF_modelC3)
+
+# Plot raster
+plot(map)
+#plot(map2)
+
+# Write classification to disk
+writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
+
+# 5. Calculate class probabilities for each pixel.
+# Run predict() to store RF probabilities for class 1-6
+RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+
+# Plot raster
+plot(RF_modelC3_p)
+
+# Scale probabilities to integer values 0-100 and write to disk
+writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
 
 
 
