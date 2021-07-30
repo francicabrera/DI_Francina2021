@@ -35,7 +35,7 @@ library(reshape2)
 library(randomForest)
 library(caTools)
 library(googledrive)
-library(utils)
+library(e1071)
 
 ################################################################################
 # 1. Load and prepare the data
@@ -266,7 +266,7 @@ dim(train)
 dim(test)
 
 # 2. Model
-RF_modelC3 <- randomForest(classID ~ ., data = train, ntree=2500)
+RF_modelC3 <- randomForest(classID ~ ., data = train, ntree=750, mtry=2)
 
 # 3. Model performance
 print(RF_modelC3)
@@ -304,13 +304,44 @@ plot(RF_modelC3_p)
 writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
 
 
+#Automated hyperparameter optimization
+
+# Define accuracy from 5-fold cross-validation as optimization measure
+cv <- tune.control(cross = 4) 
+
+# Use tune.randomForest to assess the optimal combination of ntree and mtry
+C3rf.tune500 <- tune.randomForest(classID~., data = train, ntree=c(500), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.29%
+C3rf.tune750 <- tune.randomForest(classID~., data = train, ntree=c(750), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 53.46
+C3rf.tune1000 <- tune.randomForest(classID~., data = train, ntree=c(1000), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.11
+C3rf.tune1250 <- tune.randomForest(classID~., data = train, ntree=c(1250), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.21
+C3rf.tune1500 <- tune.randomForest(classID~., data = train, ntree=c(1500), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.42
+C3rf.tune1750 <- tune.randomForest(classID~., data = train, ntree=c(1750), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 53.65
+C3rf.tune2000 <- tune.randomForest(classID~., data = train, ntree=c(2000), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 53.71
+
+# Store the best model in a new object for further use
+C3rf.best <- C3rf.tune$best.model
+
+# Is the parametrization and/or different from your previous model?
+print(C3rf.best)
+
+
+# Accuracy assesment
 
 
 
 
-
-
-
+# ggplot(spectra.df, aes(x=RF_modelC3$err.rate, y=RF_modelC3$ntree, color='red')) +
+#   geom_line() +
+#   theme_bw()
+# 
+# 
 
 
 
