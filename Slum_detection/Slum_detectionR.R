@@ -36,6 +36,7 @@ library(randomForest)
 library(caTools)
 library(googledrive)
 library(e1071)
+library(corrr)
 
 ################################################################################
 # 1. Load and prepare the data
@@ -284,7 +285,9 @@ partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot
 # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
-#map2 <- predict(mosaic_DN, RF_modelC3)
+
+map2 <- RF_modelC3 %>% 
+  predict(mosaic_C3, test)
 
 # Plot raster
 plot(map)
@@ -298,10 +301,18 @@ writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
 RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
 
 # Plot raster
-plot(RF_modelC3_p)
+plot(RF_modelC3_p$layer.2)
 
 # Scale probabilities to integer values 0-100 and write to disk
 writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
+
+
+# Extract image values at training point locations
+predictC3.sr <- raster::extract(map, trainC3, sp=T)
+
+# Convert to data.frame and convert classID into factor
+predictC3.df <- as.data.frame(predictC3.sr)
+
 
 
 #Automated hyperparameter optimization
@@ -332,7 +343,55 @@ C3rf.best <- C3rf.tune$best.model
 print(C3rf.best)
 
 
-# Accuracy assesment
+# How accurate is our model?
+# The code for this section can be found in this source: https://andrewmaclachlan.github.io/CASA0005repo/advanced-r-maup-and-more-regression.html#cross-validation
+
+# We can run a correlation between the data we left out and the predicted data to assess the accuracy.
+actuals_preds <- data.frame(cbind(actuals=trainC3.df$classID,
+                                  predicteds=predictC3.df$layer))
+
+actuals_preds_correlation <- actuals_preds %>%
+  correlate() %>%
+  print()
+
+# We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
+# MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
+
+min_max_accuracy <- mean(apply(actuals_preds, 1, min, na.rm=TRUE) /
+                           apply(actuals_preds, 1, max, na.rm=TRUE))  
+min_max_accuracy
+
+
+# Cross validation
+
+
+
+
+
+
+
+
+
+
+
+
+# Create a stratified reference sample using sampleStratified()
+
+strat_smpl <- sampleStratified(map, size = 25, sp = TRUE, na.rm = TRUE)
+
+writeOGR()
+
+plot(strat_smpl)
+
+
+# 
+
+
+
+
+
+
+
 
 
 
@@ -342,6 +401,12 @@ print(C3rf.best)
 #   theme_bw()
 # 
 # 
+
+
+
+
+
+
 
 
 
