@@ -361,6 +361,7 @@ min_max_accuracy <- mean(apply(actuals_preds, 1, min, na.rm=TRUE) /
                            apply(actuals_preds, 1, max, na.rm=TRUE))  
 min_max_accuracy
 
+# Kappa statistics
 
 # Cross validation
 
