@@ -148,11 +148,12 @@ mosaic_C3 %>%
   ggpairs(.,axisLabels="none")
 
 # Cloud Assessment 
-# PlanetScope provides Usable Data Masks (UDM) to asess the data quality of their images
+# PlanetScope provides Usable Data Masks (UDM) to assess the data quality of their images
 # See more here: https://developers.planet.com/docs/data/udm-2/
-# Create a temporary file that will be substituted with the downloaded raster.
+# Let's verify the appearance of pixels covered with clouds or shadow.
+# Create a temporary file that will be substituted with the downloaded UDM raster.
 temp49_mask <- tempfile(fileext = ".tif")
-# Download the raster with the file's id from Google Drive.
+# Download the UDM raster with the file's id from Google Drive.
 dl49_mask <- drive_download(as_id("18r619B2o98q1JHxtkSyPFArvVKqKcpev"),
                        path = temp49_mask, overwrite = TRUE)
 # Create the raster stack
@@ -160,17 +161,18 @@ raster49_mask <- stack(temp49_mask)
 # Check the coordinate system is WGS 84 / UTM zone 19N,
 # if not use: %>% projectRaster(., crs=32619)
 crs(raster49_mask)
-# 
+# Plot the raster to visually verify the appearance on pixels with clouds or shadows.
+plot(raster49_mask) 
+
+# Find the most frequent values using freq().
+# Consider the meaning of 0 as “FALSE” or “NO”, 1 equals “TRUE” or “YES”.
 # See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
 freq(raster49_mask) 
 
-plot(raster49_mask)
-
-
-# Repeat the same process with the mask from the second raster.
+# Repeat the same process with the UDM raster from the second scene.
 # Create a temporary file that will be substituted with the downloaded raster.
 temp50_mask <- tempfile(fileext = ".tif")
-# Download the raster with the file's id from Google Drive.
+# Download the UDM raster with the file's id from Google Drive.
 dl50_mask <- drive_download(as_id("18HnyLNzhswsV2S3b1EokS5OHXKsesZ99"),
                             path = temp50_mask, overwrite = TRUE)
 # Create the raster stack
@@ -178,9 +180,12 @@ raster50_mask <- stack(temp50_mask)
 # Check the coordinate system is WGS 84 / UTM zone 19N,
 # if not use: %>% projectRaster(., crs=32619)
 crs(raster50_mask)
+# Plot the raster to visually verify the appearance on pixels with clouds or shadows.
+plot(raster50_mask)
+# Find the most frequent values using freq().
 freq(raster50_mask) 
 
-plot(raster50_mask)
+
 
 
 # Training data 2
