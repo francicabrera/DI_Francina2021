@@ -40,13 +40,13 @@ library(corrr)
 
 ################################################################################
 # 1. Load and prepare the data
-# a.1) Distrito Nacional's boundary
-#dn_boundary <- st_read(here::here("data","geo","DN_boundary.shp")) # Test
-dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>% 
-  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
-  st_transform(.,32619)
-# Quick look of the feature
-qtm(dn_boundary)
+# # a.1) Distrito Nacional's boundary
+# #dn_boundary <- st_read(here::here("data","geo","DN_boundary.shp")) # Test
+# dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>% 
+#   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+#   st_transform(.,32619)
+# # Quick look of the feature
+# qtm(dn_boundary)
 
 # a.2) Circumscription 3
 c3_boundary <- st_read(here("data","geo","Circ3.shp")) %>% 
@@ -81,7 +81,7 @@ raster50 <- stack(temp50)
 # if not use: %>% projectRaster(., crs=32619)
 crs(raster50) 
 
-# Quick look at the images
+# Quick look at the images by the different bands
 plot(raster49, main="PlanetScope Distrito Nacional 20210223_123349_104e_3B_AnalyticMS_SR")
 plot(raster50, main="PlanetScope Distrito Nacional 20210223_123350_104e_3B_AnalyticMS_SR")
 
@@ -91,24 +91,24 @@ raster_mosaic <- mosaic(raster49, raster50, fun=mean, tolerance=0.05, filename="
 # Quick look at the mosaics
 plot(raster_mosaic, main="Mosaic of PlanetScope scenes")
 
-# Crop the mosaic to the Distrito Nacional's boundary with crop()
-mosaic_DN <- crop(raster_mosaic, dn_boundary, filename="mosaicDN_crop", overwrite=TRUE) %>% 
-  mask(., dn_boundary)
+# # Crop the mosaic to the Distrito Nacional's boundary with crop()
+# mosaic_DN <- crop(raster_mosaic, dn_boundary, filename="mosaicDN_crop", overwrite=TRUE) %>% 
+#   mask(., dn_boundary)
 
 # Crop the mosaic to the Circunscription 3 (C3)'s boundary with crop()
 mosaic_C3 <- crop(raster_mosaic, c3_boundary, filename="mosaicC3_crop", overwrite=TRUE) %>% 
   mask(., c3_boundary)
 
 # Quick look at the cropped raster
-plot(mosaic_DN, main="Mosaic cropped to Distrito Nacional's boundary")
+#plot(mosaic_DN, main="Mosaic cropped to Distrito Nacional's boundary")
 plot(mosaic_C3, main="Mosaic cropped to Circunscription 3's boundary")
 
-# Information on the Distrito Nacional's raster stack
-extent(mosaic_DN) # extent
-ncell(mosaic_DN) # number of cells
-dim(mosaic_DN) # number of rows, columns, layers
-nlayers(mosaic_DN) # number of layers
-res(mosaic_DN) # xres, yres
+# # Information on the Distrito Nacional's raster stack
+# extent(mosaic_DN) # extent
+# ncell(mosaic_DN) # number of cells
+# dim(mosaic_DN) # number of rows, columns, layers
+# nlayers(mosaic_DN) # number of layers
+# res(mosaic_DN) # xres, yres
 
 # Information on the Circunscription 3 (C3)'s raster stack 
 extent(mosaic_C3) # extent
@@ -119,7 +119,7 @@ res(mosaic_C3) # xres, yres
 
 # Name the Bands based on where they sample the electromagnetic spectrum
 # DN's mosaic
-names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR') 
+# names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR') 
 # C3' mosaic
 names(mosaic_C3) <- c('blue', 'green', 'red', 'NIR')
 
@@ -172,9 +172,9 @@ crs(trainC3) # Check crs
 # Extract image values at training point locations
 trainC3.sr <- raster::extract(mosaic_C3, trainC3, sp=T)
 
-# Convert to data.frame and convert classID into factor
+# Convert to data.frame 
 trainC3.df <- as.data.frame(trainC3.sr)
-trainC3.df$classID <- as.factor(trainC3.df$classID)
+trainC3.df$classID <- as.factor(trainC3.df$classID) # convert classID into factor
 
 # Create boxplots of reflectance grouped by land cover class
 # Melt dataframe containing point id, classID, and 6 spectral bands
