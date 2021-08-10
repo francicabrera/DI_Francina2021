@@ -147,6 +147,42 @@ mosaic_C3 %>%
   sample_n(., 100) %>%
   ggpairs(.,axisLabels="none")
 
+# Cloud Assessment 
+# PlanetScope provides Usable Data Masks (UDM) to asess the data quality of their images
+# See more here: https://developers.planet.com/docs/data/udm-2/
+# Create a temporary file that will be substituted with the downloaded raster.
+temp49_mask <- tempfile(fileext = ".tif")
+# Download the raster with the file's id from Google Drive.
+dl49_mask <- drive_download(as_id("18r619B2o98q1JHxtkSyPFArvVKqKcpev"),
+                       path = temp49_mask, overwrite = TRUE)
+# Create the raster stack
+raster49_mask <- stack(temp49_mask)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster49_mask)
+# 
+# See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
+freq(raster49_mask) 
+
+plot(raster49_mask)
+
+
+# Repeat the same process with the mask from the second raster.
+# Create a temporary file that will be substituted with the downloaded raster.
+temp50_mask <- tempfile(fileext = ".tif")
+# Download the raster with the file's id from Google Drive.
+dl50_mask <- drive_download(as_id("18HnyLNzhswsV2S3b1EokS5OHXKsesZ99"),
+                            path = temp50_mask, overwrite = TRUE)
+# Create the raster stack
+raster50_mask <- stack(temp50_mask)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster50_mask)
+freq(raster50_mask) 
+
+plot(raster50_mask)
+
+
 # Training data 2
 # The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
 # The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
