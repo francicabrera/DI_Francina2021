@@ -14,7 +14,7 @@
 ################################################################################
 
 # Load all the required packages
-#install.packages('')
+# install.packages('caret')
 
 library(sp)
 library(raster)
@@ -36,7 +36,10 @@ library(randomForest)
 library(caTools)
 library(googledrive)
 library(e1071)
+library(diffeR)
+library(caret)
 library(corrr)
+
 
 ################################################################################
 # 1. Load and prepare the data
@@ -85,7 +88,47 @@ crs(raster50)
 plot(raster49, main="PlanetScope Distrito Nacional 20210223_123349_104e_3B_AnalyticMS_SR")
 plot(raster50, main="PlanetScope Distrito Nacional 20210223_123350_104e_3B_AnalyticMS_SR")
 
-# Merge the images to create a mosaic using the function mosaic()
+# Cloud Assessment 
+# PlanetScope provides Usable Data Masks (UDM) to assess the data quality of their images
+# See more here: https://developers.planet.com/docs/data/udm-2/
+# Let's verify the appearance of pixels covered with clouds or shadow.
+# Create a temporary file that will be substituted with the downloaded UDM raster.
+temp49_mask <- tempfile(fileext = ".tif")
+# Download the UDM raster with the file's id from Google Drive.
+dl49_mask <- drive_download(as_id("18r619B2o98q1JHxtkSyPFArvVKqKcpev"),
+                            path = temp49_mask, overwrite = TRUE)
+# Create the raster stack
+raster49_mask <- stack(temp49_mask)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster49_mask)
+# Plot the raster to visually verify the appearance on pixels with clouds or shadows.
+plot(raster49_mask) 
+
+# Find the most frequent values using freq().
+# Consider the meaning of 0 as “FALSE” or “NO”, 1 equals “TRUE” or “YES”.
+# Or, 0: no cloud, 1: cloud; 0: no shadow, 1: shadow.
+# See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
+freq(raster49_mask) 
+
+# Repeat the same process with the UDM raster from the second scene.
+# Create a temporary file that will be substituted with the downloaded raster.
+temp50_mask <- tempfile(fileext = ".tif")
+# Download the UDM raster with the file's id from Google Drive.
+dl50_mask <- drive_download(as_id("18HnyLNzhswsV2S3b1EokS5OHXKsesZ99"),
+                            path = temp50_mask, overwrite = TRUE)
+# Create the raster stack
+raster50_mask <- stack(temp50_mask)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster50_mask)
+# Plot the raster to visually verify the appearance on pixels with clouds or shadows.
+plot(raster50_mask)
+# Find the most frequent values using freq().
+freq(raster50_mask) 
+
+
+# Merge the two original scenes to create a mosaic using the function mosaic()
 raster_mosaic <- mosaic(raster49, raster50, fun=mean, tolerance=0.05, filename="raster_mosaic", overwrite=TRUE)
 
 # Quick look at the mosaics
@@ -147,48 +190,7 @@ mosaic_C3 %>%
   sample_n(., 100) %>%
   ggpairs(.,axisLabels="none")
 
-# Cloud Assessment 
-# PlanetScope provides Usable Data Masks (UDM) to assess the data quality of their images
-# See more here: https://developers.planet.com/docs/data/udm-2/
-# Let's verify the appearance of pixels covered with clouds or shadow.
-# Create a temporary file that will be substituted with the downloaded UDM raster.
-temp49_mask <- tempfile(fileext = ".tif")
-# Download the UDM raster with the file's id from Google Drive.
-dl49_mask <- drive_download(as_id("18r619B2o98q1JHxtkSyPFArvVKqKcpev"),
-                       path = temp49_mask, overwrite = TRUE)
-# Create the raster stack
-raster49_mask <- stack(temp49_mask)
-# Check the coordinate system is WGS 84 / UTM zone 19N,
-# if not use: %>% projectRaster(., crs=32619)
-crs(raster49_mask)
-# Plot the raster to visually verify the appearance on pixels with clouds or shadows.
-plot(raster49_mask) 
-
-# Find the most frequent values using freq().
-# Consider the meaning of 0 as “FALSE” or “NO”, 1 equals “TRUE” or “YES”.
-# See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
-freq(raster49_mask) 
-
-# Repeat the same process with the UDM raster from the second scene.
-# Create a temporary file that will be substituted with the downloaded raster.
-temp50_mask <- tempfile(fileext = ".tif")
-# Download the UDM raster with the file's id from Google Drive.
-dl50_mask <- drive_download(as_id("18HnyLNzhswsV2S3b1EokS5OHXKsesZ99"),
-                            path = temp50_mask, overwrite = TRUE)
-# Create the raster stack
-raster50_mask <- stack(temp50_mask)
-# Check the coordinate system is WGS 84 / UTM zone 19N,
-# if not use: %>% projectRaster(., crs=32619)
-crs(raster50_mask)
-# Plot the raster to visually verify the appearance on pixels with clouds or shadows.
-plot(raster50_mask)
-# Find the most frequent values using freq().
-freq(raster50_mask) 
-
-
-
-
-# Training data 2
+# Training data 
 # The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
 # The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
 # Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225,
@@ -209,6 +211,8 @@ trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>%
 # Quick look of the feature
 qtm(trainC3)
 crs(trainC3) # Check crs
+# Check how many data points are per class
+trainC3 %>% group_by(classID) %>% count()
 
 # Extract image values at training point locations
 trainC3.sr <- raster::extract(mosaic_C3, trainC3, sp=T)
@@ -304,11 +308,43 @@ sum(is.na(trainC3_df))
 sample <- sample.split(trainC3_df$classID, SplitRatio = .80)
 train <- subset(trainC3_df, sample == TRUE)
 test <- subset(trainC3_df, sample == FALSE)
+
+# Check how many data points are per class
+train %>% group_by(classID) %>% count()
+test %>% group_by(classID) %>% count()
+
+# Check the dimension of the objects
 dim(train)
 dim(test)
 
 # 2. Model
-RF_modelC3 <- randomForest(classID ~ ., data = train, ntree=750, mtry=2)
+# Automated hyperparameter optimization
+# This part of the process uses the package: "e1071"
+# Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommended
+# to set it to a large number and compare across multiple runs of the model.
+# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
+# Number of variables (mtry): set the number of k-folds that will run to find the optimal parameter.
+# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
+
+# Define accuracy from 5-fold cross-validation as optimization measure
+cv <- tune.control(cross = 5) 
+
+# Use tune.randomForest to assess the optimal combination of ntree and mtry
+RF_modelC3.tune500 <- tune.randomForest(classID~., data = train, ntree=c(500), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.29%
+RF_modelC3.tune750 <- tune.randomForest(classID~., data = train, ntree=c(750), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 53.46
+RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=c(1000), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.11
+RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=c(1250), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.21
+RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=c(1500), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 54.42
+RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=c(1750), mtry=c(2:10), tunecontrol = cv)
+#OOB estimate of  error rate: 53.65
+
+# Store the best model in a new object for further use
+RF_modelC3 <- RF_modelC3.tune750$best.model
 
 # 3. Model performance
 print(RF_modelC3)
@@ -327,12 +363,12 @@ partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
 
-map2 <- RF_modelC3 %>% 
-  predict(mosaic_C3, test)
+
+
 
 # Plot raster
 plot(map)
-#plot(map2)
+freq(map)
 
 # Write classification to disk
 writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
@@ -341,11 +377,16 @@ writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
 # Run predict() to store RF probabilities for class 1-6
 RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
 
-# Plot raster
+# Plot raster of class: informal settlement Type II
 plot(RF_modelC3_p$layer.2)
+
+freq(RF_modelC3_p)
 
 # Scale probabilities to integer values 0-100 and write to disk
 writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
+
+
+
 
 
 # Extract image values at training point locations
@@ -356,32 +397,11 @@ predictC3.df <- as.data.frame(predictC3.sr)
 
 
 
-#Automated hyperparameter optimization
 
-# Define accuracy from 5-fold cross-validation as optimization measure
-cv <- tune.control(cross = 4) 
 
-# Use tune.randomForest to assess the optimal combination of ntree and mtry
-C3rf.tune500 <- tune.randomForest(classID~., data = train, ntree=c(500), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.29%
-C3rf.tune750 <- tune.randomForest(classID~., data = train, ntree=c(750), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 53.46
-C3rf.tune1000 <- tune.randomForest(classID~., data = train, ntree=c(1000), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.11
-C3rf.tune1250 <- tune.randomForest(classID~., data = train, ntree=c(1250), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.21
-C3rf.tune1500 <- tune.randomForest(classID~., data = train, ntree=c(1500), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.42
-C3rf.tune1750 <- tune.randomForest(classID~., data = train, ntree=c(1750), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 53.65
-C3rf.tune2000 <- tune.randomForest(classID~., data = train, ntree=c(2000), mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 53.71
 
-# Store the best model in a new object for further use
-C3rf.best <- C3rf.tune$best.model
 
-# Is the parametrization and/or different from your previous model?
-print(C3rf.best)
+
 
 
 # How accurate is our model?
@@ -398,11 +418,12 @@ actuals_preds_correlation <- actuals_preds %>%
 # We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
 # MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
 
-min_max_accuracy <- mean(apply(actuals_preds, 1, min, na.rm=TRUE) /
-                           apply(actuals_preds, 1, max, na.rm=TRUE))  
+min_max_accuracy <- mean(apply(actuals_preds$, 1, min, na.rm=TRUE) /
+                           apply(actuals_preds$, 1, max, na.rm=TRUE))  
 min_max_accuracy
 
 # Kappa statistics
+
 
 # Cross validation
 
@@ -427,6 +448,30 @@ plot(strat_smpl)
 
 
 # 
+
+
+
+
+
+# Other Method
+# https://www.youtube.com/watch?v=ww8KWgT98Hw
+set.seed(42)
+trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
