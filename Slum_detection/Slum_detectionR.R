@@ -40,6 +40,10 @@ library(diffeR)
 library(caret)
 library(corrr)
 library(grid)
+library(RStoolbox)
+library(ggsn)
+library(ggspatial)
+library(grid)
 
 
 ################################################################################
@@ -57,10 +61,10 @@ dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>%
 # Quick look of the feature
 qtm(dn_boundary)
 
-# # Distrito Nacional's circumscriptions
+# Distrito Nacional's circumscriptions
 dn_circ <- st_read(here("data","geo","DN_circumscriptions.shp")) %>%
   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
-  st_transform(.,32619)
+  st_transform(.,32619) 
 # Quick look of the feature
 qtm(dn_circ)
 
@@ -501,14 +505,22 @@ rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>%
           main = "Distrito Nacional") 
 
 
+
   tm_shape(dn_boundary) +
-  tm_polygons(col = "red",
-              border.col = "white",
-              lwd=0.5) +
-    tm_shape(dn_boundary) +
+    tm_fill(col = NA) +
+    tm_borders(col = "white",
+               lwd = 0.5) +
+    tm_shape(c3_boundary) +
     tm_polygons(col = "red",
                 border.col = "white",
+                lwd=0.5) +
+    tm_shape(dn_circ) +
+    tm_polygons(col = "gray",
+                border.col = "white",
                 lwd=0.5)
+  
+  
+
   
 tmap_save(rC_rgb,
           insets_tm = inset,
@@ -519,14 +531,158 @@ tmap_save(rC_rgb,
   
 
 
-Map1 <- tm_shape(rC_rgb) +
-  tm_raster()
-  tm_rgb(r = 1,
+Map1 <-  tm_shape(raster_mosaic) +
+  tm_rgb(
+    r = 1,
     g = 2,
     b = 3,
     alpha = NA,
     saturation = 1,
-    interpolate = TRUE) +
+    interpolate = TRUE,
+    max.value = 255)
+  
+
+# Labels
+# Distrito Nacional
+# choose a point on the surface of each geometry
+DN_points <- sf::st_point_on_surface(dn_boundary)
+# retrieve the coordinates
+DN_coords <- as.data.frame(sf::st_coordinates(DN_points))
+DN_coords$Label <- dn_boundary$TOPONIMIA
+
+# C3
+# choose a point on the surface of each geometry
+DNc_points <- sf::st_point_on_surface(dn_circ)
+# retrieve the coordinates
+DNc_coords <- as.data.frame(sf::st_coordinates(DNc_points))
+DNc_coords$Label <- dn_circ$TOPONIMIA
+
+
+# Map of Study Area
+Map1_main <- ggplot() +
+  ggRGB(raster_mosaic,
+        r = 3,
+        g = 2,
+        b = 1,
+      stretch = "lin",
+      ggLayer = TRUE) +
+  geom_sf(data = c3_boundary,
+          fill = alpha("#fed98e",0.4)) +
+  theme_minimal() +
+  labs(x="", 
+       y="") +
+  geom_sf(data = dn_circ,
+          fill = NA,
+          lwd = 0.3,
+          colour = "#cc4c02") +
+  geom_text(data = DNc_coords,
+             aes(X,Y,
+                 label= Label),
+             colour = "white",
+            size = 4) +
+  theme(legend.position="bottom")+
+  scalebar(dn_circ, dist = 5, dist_unit = "km", location = "bottomright",
+           transform = TRUE) +
+  # annotation_scale(plot_unit = "km",
+  #                  aes(location = "br")) +
+  north(data=dn_circ,
+        location= "topright",
+        symbol = 3)
+
+
+
+
+Map1_loc <- ggplot() +
+  geom_sf(data = provinces,
+          fill = "#cccccc",
+          lwd = 0.3,
+          colour = "white") +
+  geom_sf(data = dn_boundary,
+          fill = "#fe9929",
+          lwd = 0.2) +
+  geom_text(data = DN_coords,
+            aes(X,Y,
+                label= Label),
+            colour = "black",
+            size = 4,
+            nudge_x = 1) +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        panel.background = element_blank(), axis.line = element_blank(),
+        axis.text=element_blank(), axis.ticks=element_blank()) +
+  labs(x="", y="") 
+
+  
+  
+
+Map1_main +
+  annotation_custom(ggplotGrob(Map1_loc), 
+                    ymin = -1, ymax=1, xmin=1, xmax=1)
+
+
+inset <- tm_shape(provinces) +
+  tm_polygons(col = "#cccccc",
+              border.col = "white",
+              lwd=0.5)+
+  tm_layout(frame=FALSE,
+            bg.color = "transparent")+
+  tm_shape(dn_boundary) +
+  tm_polygons(col = "#8856a7") +
+  tm_text("TOPONIMIA", 
+          col = "black",
+          xmod=0.8,
+          ymod=-0.5,
+          size = 0.32) +
+  theme_minimal() +
+
+
++
+  geom_text(data = dn_circ, aes(X, Y, label = TOPONIMIA), size = 5)
+  
+
+
+
+
+  
+  
+  
+
+
+
+
+
+
+  
+  Map2 <- ggplot() +
+  geom_bin2d(data = CasesHRTA1_pd,
+             aes(X, Y),
+             binwidth = c(0.005, 0.005)) + 
+  geom_sf(data = RoadsA1,
+          col="#636363",
+          size=0.07) +
+  theme_minimal() +
+  scale_fill_distiller(palette = "GnBu",
+                       direction = 1, 
+                       name= "Count of cases with High RTs")+
+  theme(legend.position="bottom")+
+  labs(x="",
+       y="")+
+  geom_sf(data = EmerUnitsA1_pd,
+          col="#8856a7",
+          size=1,)+ 
+  geom_text(data = EmerUnitsA1_pd,
+            aes(X, Y, label = Ficha),
+            colour = "#404040",
+            size=3,
+            vjust = -1)+
+  annotation_scale(bar_cols=c("#f0f0f0","#636363"))+
+  north(data=CasesHRTA1_pd,
+        location= "bottomright",
+        symbol = 3)
+
+
+  
+  
+  
   
 tm_compass(north = 0,
            type = "arrow",
@@ -564,14 +720,7 @@ inset <- tm_shape(provinces) +
           size = 0.32)
 
 
-plotRGB(rC_rgb)
 
-
-
-tm_shape(mosaic_DN)+
-  tm_raster(style= "cat",
-            title="Land Cover")+
-  tm_layout(legend.outside = TRUE)
 
 
 
