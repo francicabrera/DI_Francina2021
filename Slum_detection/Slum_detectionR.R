@@ -14,7 +14,7 @@
 ################################################################################
 
 # Load all the required packages
-# install.packages('caret')
+install.packages('grid')
 
 library(sp)
 library(raster)
@@ -39,19 +39,32 @@ library(e1071)
 library(diffeR)
 library(caret)
 library(corrr)
+library(grid)
 
 
 ################################################################################
 # 1. Load and prepare the data
-# # a.1) Distrito Nacional's boundary
-# #dn_boundary <- st_read(here::here("data","geo","DN_boundary.shp")) # Test
-# dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>% 
-#   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
-#   st_transform(.,32619)
-# # Quick look of the feature
-# qtm(dn_boundary)
+# Provinces
+provinces <- st_read(here("data","geo", "PROVCenso2010.shp")) %>% 
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+qtm(provinces)
 
-# a.2) Circumscription 3
+# Distrito Nacional's boundary
+dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>%
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+# Quick look of the feature
+qtm(dn_boundary)
+
+# # Distrito Nacional's circumscriptions
+dn_circ <- st_read(here("data","geo","DN_circumscriptions.shp")) %>%
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+# Quick look of the feature
+qtm(dn_circ)
+
+# Circumscription 3
 c3_boundary <- st_read(here("data","geo","Circ3.shp")) %>% 
   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
   st_transform(.,32619)
@@ -130,13 +143,12 @@ freq(raster50_mask)
 
 # Merge the two original scenes to create a mosaic using the function mosaic()
 raster_mosaic <- mosaic(raster49, raster50, fun=mean, tolerance=0.05, filename="raster_mosaic", overwrite=TRUE)
-
 # Quick look at the mosaics
 plot(raster_mosaic, main="Mosaic of PlanetScope scenes")
 
-# # Crop the mosaic to the Distrito Nacional's boundary with crop()
-# mosaic_DN <- crop(raster_mosaic, dn_boundary, filename="mosaicDN_crop", overwrite=TRUE) %>% 
-#   mask(., dn_boundary)
+# Crop the mosaic to the Distrito Nacional's boundary with crop()
+mosaic_DN <- crop(raster_mosaic, dn_boundary, filename="mosaicDN_crop", overwrite=TRUE) %>%
+  mask(., dn_boundary)
 
 # Crop the mosaic to the Circunscription 3 (C3)'s boundary with crop()
 mosaic_C3 <- crop(raster_mosaic, c3_boundary, filename="mosaicC3_crop", overwrite=TRUE) %>% 
@@ -161,17 +173,28 @@ nlayers(mosaic_C3) # number of layers
 res(mosaic_C3) # xres, yres
 
 # Name the Bands based on where they sample the electromagnetic spectrum
+# Mosaic
+names(raster_mosaic) <- c('blue', 'green', 'red', 'NIR') 
 # DN's mosaic
-# names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR') 
+names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR') 
 # C3' mosaic
 names(mosaic_C3) <- c('blue', 'green', 'red', 'NIR')
 
 # Plot the data in true colours and false composite.
+# DN
 # true colour composite
-rC_rgb <- stack(mosaic_C3$red, mosaic_C3$green, mosaic_C3$blue) %>% 
+rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>% 
   plotRGB(.,axes=TRUE, stretch="lin")
 # false colour composite
-rC_false <- stack(mosaic_C3$NIR, mosaic_C3$red, mosaic_C3$green) %>% 
+rC_false <- stack(raster_mosaic$NIR, raster_mosaic$red, raster_mosaic$green) %>% 
+  plotRGB(.,axes=TRUE, stretch="lin")
+
+# C3
+# true colour composite
+rC3_rgb <- stack(mosaic_C3$red, mosaic_C3$green, mosaic_C3$blue) %>% 
+  plotRGB(.,axes=TRUE, stretch="lin")
+# false colour composite
+rC3_false <- stack(mosaic_C3$NIR, mosaic_C3$red, mosaic_C3$green) %>% 
   plotRGB(.,axes=TRUE, stretch="lin")
 
 # Check the similarity between bands
@@ -471,9 +494,40 @@ rf.model2 <- train(class~., data=train, method= "ranger",
 # Plots
 # Map 1 - Location of Study Area
 
+# true colour composite
+rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>% 
+  plotRGB(.,axes = TRUE, 
+          stretch = "lin", 
+          main = "Distrito Nacional") 
 
 
+  tm_shape(dn_boundary) +
+  tm_polygons(col = "red",
+              border.col = "white",
+              lwd=0.5) +
+    tm_shape(dn_boundary) +
+    tm_polygons(col = "red",
+                border.col = "white",
+                lwd=0.5)
+  
+tmap_save(rC_rgb,
+          insets_tm = inset,
+          insets_vp=viewport(0.35, 0.22, width = 0.15, height = 0.15),
+          filename="Map1.png",
+          dpi=600)
+  
+  
 
+
+Map1 <- tm_shape(rC_rgb) +
+  tm_raster()
+  tm_rgb(r = 1,
+    g = 2,
+    b = 3,
+    alpha = NA,
+    saturation = 1,
+    interpolate = TRUE) +
+  
 tm_compass(north = 0,
            type = "arrow",
            text.size = 0.8,
@@ -493,6 +547,59 @@ tm_compass(north = 0,
             legend.outside.position = "right",
             legend.text.size = 0.5,
             legend.height = 0.5)
+
+# Inset Map of the studied area
+inset <- tm_shape(provinces) +
+  tm_polygons(col = "#cccccc",
+              border.col = "white",
+              lwd=0.5)+
+  tm_layout(frame=FALSE,
+            bg.color = "transparent")+
+  tm_shape(dn_boundary) +
+  tm_polygons(col = "#8856a7") +
+  tm_text("TOPONIMIA", 
+          col = "black",
+          xmod=0.8,
+          ymod=-0.5,
+          size = 0.32)
+
+
+plotRGB(rC_rgb)
+
+
+
+tm_shape(mosaic_DN)+
+  tm_raster(style= "cat",
+            title="Land Cover")+
+  tm_layout(legend.outside = TRUE)
+
+
+
+
+
+ggplot() +
+  geom_raster(data = map , aes(x = x, y = y,
+                                       fill = fct_elevation_2)) + 
+  scale_fill_manual(values = terrain.colors(3)) + 
+  coord_quickmap()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
