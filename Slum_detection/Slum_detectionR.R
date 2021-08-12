@@ -358,13 +358,10 @@ partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot
 partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
 partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
 
-# 4. Perform a classification of the image stack using the predict() function. 
+# 5. Perform a classification of the image stack using the predict() function. 
 # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
-
-
-
 
 # Plot raster
 plot(map)
@@ -373,7 +370,7 @@ freq(map)
 # Write classification to disk
 writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
 
-# 5. Calculate class probabilities for each pixel.
+# 6. Calculate class probabilities for each pixel.
 # Run predict() to store RF probabilities for class 1-6
 RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
 
@@ -384,6 +381,7 @@ freq(RF_modelC3_p)
 
 # Scale probabilities to integer values 0-100 and write to disk
 writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
+
 
 
 
@@ -455,20 +453,46 @@ plot(strat_smpl)
 
 # Other Method
 # https://www.youtube.com/watch?v=ww8KWgT98Hw
-set.seed(42)
+set.seed(42) # allows reproducibility to a process with a random component (random forest)
+# Set the train control parameters. Method: cross validation, 5 k-folds, verboseIter = True (to print everything)
 trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
 
+rf.model2 <- train(class~., data=train, method= "ranger",
+                   tuneLength = 10,
+                   preProcess = c("center", "scale"),
+                   trControl = trainctrl,
+                   metric = "Kappa")
 
 
 
 
 
+################################################################################
+# Plots
+# Map 1 - Location of Study Area
 
 
 
 
-
-
+tm_compass(north = 0,
+           type = "arrow",
+           text.size = 0.8,
+           show.labels = 1,
+           cardinal.directions = c("N", "E", "S", "W"),
+           lwd = 1, 
+           position = c("right","top"),
+           color.light="#f0f0f0",
+           color.dark="#636363",
+           text.color="#636363")+
+  tm_scale_bar(position=c("left", "bottom"),
+               color.light="#f0f0f0",
+               color.dark="#636363",
+               text.color="#636363") +
+  tm_layout(inner.margin=c(0.1,0.04,0.04,0.04),
+            legend.outside=TRUE,
+            legend.outside.position = "right",
+            legend.text.size = 0.5,
+            legend.height = 0.5)
 
 
 
