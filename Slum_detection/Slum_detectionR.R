@@ -498,50 +498,6 @@ rf.model2 <- train(class~., data=train, method= "ranger",
 # Plots
 # Map 1 - Location of Study Area
 
-# true colour composite
-rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>% 
-  plotRGB(.,axes = TRUE, 
-          stretch = "lin", 
-          main = "Distrito Nacional") 
-
-
-
-  tm_shape(dn_boundary) +
-    tm_fill(col = NA) +
-    tm_borders(col = "white",
-               lwd = 0.5) +
-    tm_shape(c3_boundary) +
-    tm_polygons(col = "red",
-                border.col = "white",
-                lwd=0.5) +
-    tm_shape(dn_circ) +
-    tm_polygons(col = "gray",
-                border.col = "white",
-                lwd=0.5)
-  
-  
-
-  
-tmap_save(rC_rgb,
-          insets_tm = inset,
-          insets_vp=viewport(0.35, 0.22, width = 0.15, height = 0.15),
-          filename="Map1.png",
-          dpi=600)
-  
-  
-
-
-Map1 <-  tm_shape(raster_mosaic) +
-  tm_rgb(
-    r = 1,
-    g = 2,
-    b = 3,
-    alpha = NA,
-    saturation = 1,
-    interpolate = TRUE,
-    max.value = 255)
-  
-
 # Labels
 # Distrito Nacional
 # choose a point on the surface of each geometry
@@ -580,18 +536,16 @@ Map1_main <- ggplot() +
                  label= Label),
              colour = "white",
             size = 4) +
-  theme(legend.position="bottom")+
+  theme(legend.position="bottom") +
   scalebar(dn_circ, dist = 5, dist_unit = "km", location = "bottomright",
            transform = TRUE) +
   # annotation_scale(plot_unit = "km",
   #                  aes(location = "br")) +
   north(data=dn_circ,
-        location= "topright",
-        symbol = 3)
+        location= "bottomright",
+        symbol = 10)
 
-
-
-
+# Inset map
 Map1_loc <- ggplot() +
   geom_sf(data = provinces,
           fill = "#cccccc",
@@ -605,47 +559,17 @@ Map1_loc <- ggplot() +
                 label= Label),
             colour = "black",
             size = 4,
-            nudge_x = 1) +
+            nudge_x = 1,
+            vjust = -1.5) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         panel.background = element_blank(), axis.line = element_blank(),
         axis.text=element_blank(), axis.ticks=element_blank()) +
   labs(x="", y="") 
 
-  
-  
-
+# Combine the main map with the inset map.
 Map1_main +
   annotation_custom(ggplotGrob(Map1_loc), 
                     ymin = -1, ymax=1, xmin=1, xmax=1)
-
-
-inset <- tm_shape(provinces) +
-  tm_polygons(col = "#cccccc",
-              border.col = "white",
-              lwd=0.5)+
-  tm_layout(frame=FALSE,
-            bg.color = "transparent")+
-  tm_shape(dn_boundary) +
-  tm_polygons(col = "#8856a7") +
-  tm_text("TOPONIMIA", 
-          col = "black",
-          xmod=0.8,
-          ymod=-0.5,
-          size = 0.32) +
-  theme_minimal() +
-
-
-+
-  geom_text(data = dn_circ, aes(X, Y, label = TOPONIMIA), size = 5)
-  
-
-
-
-
-  
-  
-  
-
 
 
 
@@ -704,33 +628,6 @@ tm_compass(north = 0,
             legend.text.size = 0.5,
             legend.height = 0.5)
 
-# Inset Map of the studied area
-inset <- tm_shape(provinces) +
-  tm_polygons(col = "#cccccc",
-              border.col = "white",
-              lwd=0.5)+
-  tm_layout(frame=FALSE,
-            bg.color = "transparent")+
-  tm_shape(dn_boundary) +
-  tm_polygons(col = "#8856a7") +
-  tm_text("TOPONIMIA", 
-          col = "black",
-          xmod=0.8,
-          ymod=-0.5,
-          size = 0.32)
-
-
-
-
-
-
-
-
-ggplot() +
-  geom_raster(data = map , aes(x = x, y = y,
-                                       fill = fct_elevation_2)) + 
-  scale_fill_manual(values = terrain.colors(3)) + 
-  coord_quickmap()
 
 
 
@@ -758,7 +655,9 @@ ggplot() +
 
 
 
-
+################################################################################
+################################################################################
+################################################################################
 
 
 
@@ -768,24 +667,6 @@ ggplot() +
 #   theme_bw()
 # 
 # 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -924,7 +805,50 @@ ggplot() +
 #   stack()
 # 
 #   
+# MAP LAYOUT
+# # true colour composite
+# rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>% 
+#   plotRGB(.,axes = TRUE, 
+#           stretch = "lin", 
+#           main = "Distrito Nacional") 
 # 
+# 
+# 
+#   tm_shape(dn_boundary) +
+#     tm_fill(col = NA) +
+#     tm_borders(col = "white",
+#                lwd = 0.5) +
+#     tm_shape(c3_boundary) +
+#     tm_polygons(col = "red",
+#                 border.col = "white",
+#                 lwd=0.5) +
+#     tm_shape(dn_circ) +
+#     tm_polygons(col = "gray",
+#                 border.col = "white",
+#                 lwd=0.5)
+#   
+#   
+# 
+#   
+# tmap_save(rC_rgb,
+#           insets_tm = inset,
+#           insets_vp=viewport(0.35, 0.22, width = 0.15, height = 0.15),
+#           filename="Map1.png",
+#           dpi=600)
+#   
+#   
+# 
+# 
+# Map1 <-  tm_shape(raster_mosaic) +
+#   tm_rgb(
+#     r = 1,
+#     g = 2,
+#     b = 3,
+#     alpha = NA,
+#     saturation = 1,
+#     interpolate = TRUE,
+#     max.value = 255)
+#   
 # 
 # 
 # 
