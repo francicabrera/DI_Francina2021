@@ -14,7 +14,7 @@
 ################################################################################
 
 # Load all the required packages
-install.packages('grid')
+#install.packages('')
 
 library(sp)
 library(raster)
@@ -146,16 +146,27 @@ freq(raster50_mask)
 
 
 # Merge the two original scenes to create a mosaic using the function mosaic()
-raster_mosaic <- mosaic(raster49, raster50, fun=mean, tolerance=0.05, filename="raster_mosaic", overwrite=TRUE)
-# Quick look at the mosaics
+raster_mosaic <- mosaic(raster49,
+                        raster50, 
+                        fun=mean, 
+                        tolerance=0.05, 
+                        filename="raster_mosaic", 
+                        overwrite=TRUE)
+# Quick look at the mosaic
 plot(raster_mosaic, main="Mosaic of PlanetScope scenes")
 
 # Crop the mosaic to the Distrito Nacional's boundary with crop()
-mosaic_DN <- crop(raster_mosaic, dn_boundary, filename="mosaicDN_crop", overwrite=TRUE) %>%
+mosaic_DN <- crop(raster_mosaic, 
+                  dn_boundary, 
+                  filename="mosaicDN_crop", 
+                  overwrite=TRUE) %>%
   mask(., dn_boundary)
 
-# Crop the mosaic to the Circunscription 3 (C3)'s boundary with crop()
-mosaic_C3 <- crop(raster_mosaic, c3_boundary, filename="mosaicC3_crop", overwrite=TRUE) %>% 
+# Crop the mosaic to the Circumscription 3 (C3)'s boundary with crop()
+mosaic_C3 <- crop(raster_mosaic, 
+                  c3_boundary, 
+                  filename="mosaicC3_crop", 
+                  overwrite=TRUE) %>% 
   mask(., c3_boundary)
 
 # Quick look at the cropped raster
@@ -217,6 +228,42 @@ mosaic_C3 %>%
   sample_n(., 100) %>%
   ggpairs(.,axisLabels="none")
 
+########
+
+# NDVI
+# Let’s make a function called NDVIfun
+NDVIfun <- function(NIR, Red) {
+  NDVI <- (NIR - Red) / (NIR + Red)
+  return(NDVI)
+}
+
+# Call the function
+source('NDVIfun')
+
+# Calculate NDVI
+ndvi <- NDVIfun(mosaic_C3$NIR, mosaic_C3$red)
+
+# plot
+ndvi %>%
+  plot(.,col = rev(terrain.colors(10)), main = "NDVI")
+
+# Let's look at the histogram for this dataset
+ndvi %>%
+  hist(., breaks = 40, main = "NDVI Histogram", xlim = c(-.3,.8))
+
+veg <- ndvi %>%
+  reclassify(., cbind(-Inf, 0.3, NA))
+
+veg %>%
+  plot(.,main = 'Possible Veg cover')
+
+#######
+# GLMC
+
+
+
+
+
 # Training data 
 # The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
 # The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
@@ -243,10 +290,12 @@ trainC3 %>% group_by(classID) %>% count()
 
 # Extract image values at training point locations
 trainC3.sr <- raster::extract(mosaic_C3, trainC3, sp=T)
+trainC3.sr2 <- raster::extract(ndvi, trainC3, sp=T)
 
 # Convert to data.frame 
 trainC3.df <- as.data.frame(trainC3.sr)
 trainC3.df$classID <- as.factor(trainC3.df$classID) # convert classID into factor
+
 
 # Create boxplots of reflectance grouped by land cover class
 # Melt dataframe containing point id, classID, and 6 spectral bands
@@ -311,6 +360,12 @@ ggplot() +
   theme_bw()
 
 
+
+
+
+
+
+
 # Machine learning model: Random Forest
 # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
 # Training data (dataframe): trainC3.df
@@ -352,43 +407,84 @@ dim(test)
 # Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
 # Number of variables (mtry): set the number of k-folds that will run to find the optimal parameter.
 # Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
+# Other sources: https://www.youtube.com/watch?v=v5Bmz2eMd7M
 
 # Define accuracy from 5-fold cross-validation as optimization measure
 cv <- tune.control(cross = 5) 
 
 # Use tune.randomForest to assess the optimal combination of ntree and mtry
-RF_modelC3.tune500 <- tune.randomForest(classID~., data = train, ntree=c(500), mtry=c(2:10), tunecontrol = cv)
+RF_modelC3.tune500 <- tune.randomForest(classID~., data = train, ntree=500, mtry=c(2:10), tunecontrol = cv)
 #OOB estimate of  error rate: 54.29%
-RF_modelC3.tune750 <- tune.randomForest(classID~., data = train, ntree=c(750), mtry=c(2:10), tunecontrol = cv)
+RF_modelC3.tune750 <- tune.randomForest(classID~., data = train, ntree=750, mtry=c(2:10), tunecontrol = cv)
 #OOB estimate of  error rate: 53.46
-RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=c(1000), mtry=c(2:10), tunecontrol = cv)
+RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=1000, mtry=c(2:10), tunecontrol = cv)
 #OOB estimate of  error rate: 54.11
-RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=c(1250), mtry=c(2:10), tunecontrol = cv)
+RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=1250, mtry=c(2:10), tunecontrol = cv)
 #OOB estimate of  error rate: 54.21
-RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=c(1500), mtry=c(2:10), tunecontrol = cv)
+RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=1500, mtry=c(2:10), tunecontrol = cv)
 #OOB estimate of  error rate: 54.42
-RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=c(1750), mtry=c(2:10), tunecontrol = cv)
+RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=1750, mtry=c(2:10), tunecontrol = cv)
 #OOB estimate of  error rate: 53.65
 
 # Store the best model in a new object for further use
 RF_modelC3 <- RF_modelC3.tune750$best.model
 
+####
+# Model 2
+cv2 <- trainControl(method = "cv",
+                    number = 10,
+                    savePredictions = TRUE)
+rfGrid <- expand.grid(mtry = (2:4))
+RF_modelC32 <- train(classID~., data = train,
+                     method = "rf",
+                     trControl = cv2,
+                     verbose = TRUE,
+                     tuneGrid = rfGrid,
+                     importance = TRUE)
+RF_modelC32
+plot(RF_modelC32)
+varImp(RF_modelC32, scale = FALSE)
+
+
+predicted_class_test <- predict(RF_modelC32, test)
+predicted_class_test
+test[1]
+confusionMatrix(predicted_class_test, test[1])
+
+classified <- predict(mosaic_C3,
+                      RF_modelC32)
+classified
+par(mfrow=c(1,2))
+plot(classified)
+plotRGB(mosaic_C3,"red","green","blue","NIR",stretch="lin")
+
+###
+
 # 3. Model performance
+plot(RF_modelC3)
 print(RF_modelC3)
 RF_modelC3$err.rate[,1] # OOB estimate of  error rate
 
 # 4. Variable importance
 varImpPlot(RF_modelC3, sort=TRUE, main='Variable importance')
+varImp(RF_modelC3, scale = FALSE)
 
 # Red band
 partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
 partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
 partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
 
-# 5. Perform a classification of the image stack using the predict() function. 
+# 5. Accuracy assessment with test data
+predicted_class_test <- predict(RF_modelC3, test)
+predicted_class_test
+test[,4]
+confusionMatrix(predicted_class_test, test)
+
+# 6. Perform a classification of the image stack using the predict() function. 
 # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
+
 
 # Plot raster
 plot(map)
@@ -465,7 +561,7 @@ min_max_accuracy
 
 # Create a stratified reference sample using sampleStratified()
 
-strat_smpl <- sampleStratified(map, size = 25, sp = TRUE, na.rm = TRUE)
+strat_smpl <- sampleStratified(map, size = 50, sp = TRUE, na.rm = TRUE)
 
 writeOGR()
 
@@ -484,7 +580,7 @@ set.seed(42) # allows reproducibility to a process with a random component (rand
 # Set the train control parameters. Method: cross validation, 5 k-folds, verboseIter = True (to print everything)
 trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
 
-rf.model2 <- train(class~., data=train, method= "ranger",
+rf.model2 <- train(classID~., data=train, method= "ranger",
                    tuneLength = 10,
                    preProcess = c("center", "scale"),
                    trControl = trainctrl,
@@ -607,21 +703,7 @@ Map1_main +
   
   
   
-  
-tm_compass(north = 0,
-           type = "arrow",
-           text.size = 0.8,
-           show.labels = 1,
-           cardinal.directions = c("N", "E", "S", "W"),
-           lwd = 1, 
-           position = c("right","top"),
-           color.light="#f0f0f0",
-           color.dark="#636363",
-           text.color="#636363")+
-  tm_scale_bar(position=c("left", "bottom"),
-               color.light="#f0f0f0",
-               color.dark="#636363",
-               text.color="#636363") +
+
   tm_layout(inner.margin=c(0.1,0.04,0.04,0.04),
             legend.outside=TRUE,
             legend.outside.position = "right",
