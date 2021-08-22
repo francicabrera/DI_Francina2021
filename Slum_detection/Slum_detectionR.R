@@ -14,7 +14,7 @@
 ################################################################################
 
 # Load all the required packages
-#install.packages('')
+install.packages('glcm')
 
 library(sp)
 library(raster)
@@ -44,6 +44,7 @@ library(RStoolbox)
 library(ggsn)
 library(ggspatial)
 library(grid)
+library(glcm)
 
 
 ################################################################################
@@ -257,9 +258,69 @@ veg <- ndvi %>%
 veg %>%
   plot(.,main = 'Possible Veg cover')
 
-#######
-# GLMC
 
+
+#######
+# GLCM
+# Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis
+# Calculate using default 90 degree shift textures_shift1 <- glcm(raster(L5TSR_1986, layer=1)) plot(textures_shift1)
+# Calculate over all directions
+# Red band
+texturesRed <- glcm(raster(mosaic_C3, layer=1), 
+                         window = c(25, 25), 
+                         statistics = "variance",
+                         shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                                    c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesRed)
+
+# Green band
+texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
+                         window = c(25, 25), 
+                         statistics = "variance",
+                         shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                                    c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesGreen)
+
+# Blue band
+texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
+                          window = c(25, 25), 
+                          statistics = "variance",
+                          shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                                     c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesBlue)
+
+# NIR band
+texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
+                          window = c(25, 25), 
+                          statistics = "variance",
+                          shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                                     c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesNIR)
+
+# Principal Component Analysis (PCA) of Texture Bands
+# To reduce redundancy of texture bands and to determine the appropriate texture features,
+# we will apply PCA to all texture images.
+# The function rasterPCA() will calculate the PCA of our raster stack and will return a raster brick with multiple layers of PCA scores
+# Source code: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis
+
+# Stack the glcm layers of all bands
+mosaic_C3glcm <- stack(texturesRed, texturesGreen, texturesBlue, texturesNIR)
+
+# Develop a PCA model
+mosaic_C3PCA < -scale(mosaic_C3glcm)        # scale the data
+mosaic_C3PCA[is.na(mosaic_C3PCA)] <- 0  # define zero  all miising vaalues
+mosaic_C3PCAmodel <- rasterPCA(mosaic_C3PCA, nComp=4)
+summary(mosaic_C3PCAmodel$model)
+
+# Extract first 2 PCs from the model
+# Since, the first two PCs account for more of the variability of these textures (see standard deviation)
+# we will extract these 2 components.
+# The values from these raster layers will be used as features for our classification.
+PC1 <- mosaic_C3PCAmodel$map$PC1
+PC2 <- mosaic_C3PCAmodel$map$PC2
+
+# Stack into one raster.
+PC_glcm <- stack(PC1, PC2)
 
 
 
@@ -290,10 +351,14 @@ trainC3 %>% group_by(classID) %>% count()
 
 # Extract image values at training point locations
 trainC3.sr <- raster::extract(mosaic_C3, trainC3, sp=T)
-trainC3.sr2 <- raster::extract(ndvi, trainC3, sp=T)
+# GLCM
+trainC3.sr2 <- raster::extract(PC_glcm, trainC3, sp=T)
 
 # Convert to data.frame 
 trainC3.df <- as.data.frame(trainC3.sr)
+# GLCM
+trainC3.df2 <- as.data.frame(trainC3.sr2)
+
 trainC3.df$classID <- as.factor(trainC3.df$classID) # convert classID into factor
 
 
@@ -387,9 +452,9 @@ sum(is.na(trainC3_df))
 # Train a randomForest() classification model with the data.frame created in the prior step. 
 # The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
 # 1. Set a portion of the data aside for testing
-sample <- sample.split(trainC3_df$classID, SplitRatio = .80)
-train <- subset(trainC3_df, sample == TRUE)
-test <- subset(trainC3_df, sample == FALSE)
+sample <- sample.split(trainC3.df$classID, SplitRatio = .80)
+train <- subset(trainC3.df, sample == TRUE)
+test <- subset(trainC3.df, sample == FALSE)
 
 # Check how many data points are per class
 train %>% group_by(classID) %>% count()
