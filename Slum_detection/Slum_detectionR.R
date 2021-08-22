@@ -6,6 +6,8 @@
 
 # Data:
 
+
+
 # Code source: 
 # https://pages.cms.hu-berlin.de/EOL/gcg_eo/index.html
 # https://andrewmaclachlan.github.io/CASA0005repo/advanced-raster-analysis.html
@@ -14,7 +16,10 @@
 ################################################################################
 
 # Load all the required packages
-install.packages('glcm')
+# install.packages(' ')
+
+install.packages("remotes")
+remotes::install_github("wilsontom/modelmisc")
 
 library(sp)
 library(raster)
@@ -44,25 +49,29 @@ library(RStoolbox)
 library(ggsn)
 library(ggspatial)
 library(grid)
-library(glcm)
-
+library(glcm) # to create GLCM model
+library(imager) # to convert RGB raster in grayscale
+library(wilsontom/modelmisc) # for kappa accuracy
+# To install this package, run this code:
+# install.packages("remotes")
+# remotes::install_github("wilsontom/modelmisc")
 
 ################################################################################
 # 1. Load and prepare the data
-# Provinces
+# Dominican Republic Provinces (for visualisation only)
 provinces <- st_read(here("data","geo", "PROVCenso2010.shp")) %>% 
   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
   st_transform(.,32619)
 qtm(provinces)
 
-# Distrito Nacional's boundary
+# Distrito Nacional's boundary (for visualisation only)
 dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>%
   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
   st_transform(.,32619)
 # Quick look of the feature
 qtm(dn_boundary)
 
-# Distrito Nacional's circumscriptions
+# Distrito Nacional's circumscriptions (for visualisation only)
 dn_circ <- st_read(here("data","geo","DN_circumscriptions.shp")) %>%
   # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
   st_transform(.,32619) 
@@ -127,7 +136,7 @@ plot(raster49_mask)
 # Consider the meaning of 0 as “FALSE” or “NO”, 1 equals “TRUE” or “YES”.
 # Or, 0: no cloud, 1: cloud; 0: no shadow, 1: shadow.
 # See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
-freq(raster49_mask) 
+freq(raster49_mask$cloud) 
 
 # Repeat the same process with the UDM raster from the second scene.
 # Create a temporary file that will be substituted with the downloaded raster.
@@ -143,8 +152,10 @@ crs(raster50_mask)
 # Plot the raster to visually verify the appearance on pixels with clouds or shadows.
 plot(raster50_mask)
 # Find the most frequent values using freq().
-freq(raster50_mask) 
+freq(raster50_mask$cloud) 
 
+# As both raster show no signal of clouds, the mask wont be used. 
+# Therefore, we will remain with the original scenes.
 
 # Merge the two original scenes to create a mosaic using the function mosaic()
 raster_mosaic <- mosaic(raster49,
@@ -157,6 +168,7 @@ raster_mosaic <- mosaic(raster49,
 plot(raster_mosaic, main="Mosaic of PlanetScope scenes")
 
 # Crop the mosaic to the Distrito Nacional's boundary with crop()
+# This raster will be used for visualisation only.
 mosaic_DN <- crop(raster_mosaic, 
                   dn_boundary, 
                   filename="mosaicDN_crop", 
@@ -170,18 +182,7 @@ mosaic_C3 <- crop(raster_mosaic,
                   overwrite=TRUE) %>% 
   mask(., c3_boundary)
 
-# Quick look at the cropped raster
-#plot(mosaic_DN, main="Mosaic cropped to Distrito Nacional's boundary")
-plot(mosaic_C3, main="Mosaic cropped to Circunscription 3's boundary")
-
-# # Information on the Distrito Nacional's raster stack
-# extent(mosaic_DN) # extent
-# ncell(mosaic_DN) # number of cells
-# dim(mosaic_DN) # number of rows, columns, layers
-# nlayers(mosaic_DN) # number of layers
-# res(mosaic_DN) # xres, yres
-
-# Information on the Circunscription 3 (C3)'s raster stack 
+# Information on the Circumscription 3 (C3)'s raster stack 
 extent(mosaic_C3) # extent
 ncell(mosaic_C3) # number of cells
 dim(mosaic_C3) # number of rows, columns, layers
@@ -196,15 +197,8 @@ names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR')
 # C3' mosaic
 names(mosaic_C3) <- c('blue', 'green', 'red', 'NIR')
 
-# Plot the data in true colours and false composite.
-# DN
-# true colour composite
-rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>% 
-  plotRGB(.,axes=TRUE, stretch="lin")
-# false colour composite
-rC_false <- stack(raster_mosaic$NIR, raster_mosaic$red, raster_mosaic$green) %>% 
-  plotRGB(.,axes=TRUE, stretch="lin")
 
+# Plot the data in true colours and false composite.
 # C3
 # true colour composite
 rC3_rgb <- stack(mosaic_C3$red, mosaic_C3$green, mosaic_C3$blue) %>% 
@@ -228,6 +222,136 @@ mosaic_C3 %>%
   as.data.frame(., na.rm=TRUE) %>%
   sample_n(., 100) %>%
   ggpairs(.,axisLabels="none")
+
+
+# Training data 
+# The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
+# The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
+# Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225,
+# the classification follows six classes:
+# 1 - Informal settlements Type I: defined roads
+# 2 - Informal settlements Type II: undefined roads
+# 3 - Informal settlements Type II: undefined roads and located in hazardous areas
+# 4 - Formal settlements (all built up areas)
+# 5 - Non-settlemets (vegetation, bare ground, water, grassland, parking lots, sport courts)
+# 6 - Roads
+
+# Read training points, the following code assumes that it contains only the class attribute
+# in readOGR, dsn specifies the path to the folder containing the file (may not end with /), 
+# layer specifies the name of the shapefile without extension (.shp)
+trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>% 
+  # Project to EPSG:32619.
+  st_transform(.,32619)
+# Quick look of the feature
+qtm(trainC3)
+crs(trainC3) # Check crs
+# Check how many data points are per class
+trainC3 %>% group_by(classID) %>% count()
+
+# Extract image values at training point locations
+trainC3.sp <- raster::extract(mosaic_C3, trainC3, sp=T)
+
+# Convert to data.frame 
+trainC3.df <- as.data.frame(trainC3.sp)
+
+# Create boxplots of reflectance grouped by land cover class
+# Melt dataframe containing point id, classID, and 6 spectral bands
+spectra.df <- melt(trainC3.df, id.vars='classID', 
+                   measure.vars=c('blue', 'green', 'red', 'NIR'))
+
+# Create boxplots of spectral bands per class
+ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
+  geom_boxplot() +
+  theme_bw()
+
+
+# Machine learning model: Random Forest
+# The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
+# Training data (dataframe): trainC3.df
+# stack: mosaic_C3
+
+# the randomForest() function expects the dependent variable to be of type factor.
+# Use as.factor() for conversion of the classID column.
+trainC3.df$classID <- as.factor(trainC3.df$classID) 
+str(trainC3.df) #allows you to see the classes of the variables (all numeric)
+
+# Include only useful predictors in the model.
+trainC3_df <- select(trainC3.df, -c("id", "class_name","circ_num","coords.x1","coords.x2")) 
+# The RF algorithm cannot deal with NoData (NA) values. Remove NAs from the data.frame.
+is.na(trainC3_df) # check for null values
+sum(is.na(trainC3_df)) # check how many null values there are
+trainC3_df <- na.omit(trainC3_df)
+sum(is.na(trainC3_df))
+
+# Train a randomForest() classification model with the data.frame created in the prior step. 
+# The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
+# 1. Set a portion of the data aside for testing
+sample <- sample.split(trainC3_df$classID, SplitRatio = .80)
+train <- subset(trainC3_df, sample == TRUE)
+test <- subset(trainC3_df, sample == FALSE)
+
+# Check how many data points are per class
+train %>% group_by(classID) %>% count()
+test %>% group_by(classID) %>% count()
+
+# Check the dimension of the objects
+dim(train)
+dim(test)
+
+# 2. Model
+# Random Forest. Automated hyperparameter optimisation.
+# This part of the process uses the package: "e1071". We will optimise the mtry parameter.
+# Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommended
+# to set it to a large number and compare across multiple runs of the model.
+# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
+# Number of variables (mtry): set the number of k-folds that will run to find the optimal parameter.
+# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
+# Other sources: https://www.youtube.com/watch?v=v5Bmz2eMd7M
+
+# Define accuracy from 10-fold cross-validation as optimization measure
+cv <- tune.control(cross = 10) 
+
+# Use tune.randomForest to assess the optimal combination of ntree and mtry
+RF_modelC3.tune <- tune.randomForest(classID~., 
+                                     data = train, 
+                                     ntree=750, 
+                                     mtry=c(2:10), 
+                                     importance = TRUE,
+                                     tunecontrol = cv)
+#OOB estimate of  error rate: 53.46
+
+# Store the best model in a new object for further use
+RF_modelC3 <- RF_modelC3.tune$best.model
+print(RF_modelC3)
+
+# Check at which number of trees the model stabilises. 
+plot(RF_modelC3) 
+
+# Error rate
+RF_modelC3$err.rate[,1] # OOB estimate of  error rate
+
+#Variable importance
+# Check which variables provide more information
+varImpPlot(RF_modelC3, sort=TRUE, main='Variable importance')
+varImp(RF_modelC3, scale = FALSE)
+
+# Model Performance
+# Kohen's Kappa
+forest_kappa(RF_modelC3)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ########
 
@@ -264,6 +388,9 @@ veg %>%
 # GLCM
 # Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis
 # Calculate using default 90 degree shift textures_shift1 <- glcm(raster(L5TSR_1986, layer=1)) plot(textures_shift1)
+# Convert mosaic into a grayscale
+mosaic_C3g <- grayscale(mosaic_C3, method = "XYZ", drop = FALSE)
+
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
@@ -324,105 +451,8 @@ PC_glcm <- stack(PC1, PC2)
 
 
 
-
-# Training data 
-# The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
-# The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
-# Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225,
-# the classification follows six classes:
-# 1 - Informal settlements Type I: defined roads
-# 2 - Informal settlements Type II: undefined roads
-# 3 - Informal settlements Type II: undefined roads and located in hazardous areas
-# 4 - Formal settlements (all built up areas)
-# 5 - Non-settlemets (vegetation, bare ground, water, grassland, parking lots, sport courts)
-# 6 - Roads
-
-# Read training points, the following code assumes that it contains only the class attribute
-# in readOGR, dsn specifies the path to the folder containing the file (may not end with /), 
-# layer specifies the name of the shapefile without extension (.shp)
-trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>% 
-  # Project to EPSG:32619.
-  st_transform(.,32619)
-# Quick look of the feature
-qtm(trainC3)
-crs(trainC3) # Check crs
-# Check how many data points are per class
-trainC3 %>% group_by(classID) %>% count()
-
-# Extract image values at training point locations
-trainC3.sr <- raster::extract(mosaic_C3, trainC3, sp=T)
-# GLCM
-trainC3.sr2 <- raster::extract(PC_glcm, trainC3, sp=T)
-
-# Convert to data.frame 
-trainC3.df <- as.data.frame(trainC3.sr)
-# GLCM
-trainC3.df2 <- as.data.frame(trainC3.sr2)
-
-trainC3.df$classID <- as.factor(trainC3.df$classID) # convert classID into factor
-
-
-# Create boxplots of reflectance grouped by land cover class
-# Melt dataframe containing point id, classID, and 6 spectral bands
-spectra.df <- melt(trainC3.df, id.vars='classID', 
-                    measure.vars=c('blue', 'green', 'red', 'NIR'))
-
-# Create boxplots of spectral bands per class
-ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
-  geom_boxplot() +
-  theme_bw()
-
-# Create 2D scatterplot of image data and locations of training points
-
-# Convert image to data.frame and remove missing values
-sr.C3.val <- data.frame(getValues(mosaic_C3))
-sr.C3.val <- na.omit(sr.C3.val)
-
-# Randomly sub-sample 1000 to speed up visualisation
-sr.C3.val <- sr.C3.val[sample(nrow(sr.C3.val), 1000),]  
-
-# Specify which bands to use for the x and y axis of the plot - Red band
-xband <- "red"
-yband <- "NIR"
-
-# Create plot of band value density and training data
-ggplot() + 
-  geom_hex(data = sr.C3.val, aes(x = get(xband), y = get(yband)), bins = 100) + 
-  geom_point(data = trainC3.df, aes(x = get(xband), y = get(yband), color=classID, shape=classID), 
-             size = 2, inherit.aes = FALSE, alpha=1) + 
-  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
-  scale_x_continuous(xband, limits=c(-10, quantile(sr.C3.val[xband], 0.98, na.rm=T))) +
-  scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
-  scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
-  theme_bw()
-
-# Specify which bands to use for the x and y axis of the plot - Blue band
-xband2 <- "blue"
-
-# Create plot of band value density and training data
-ggplot() + 
-  geom_hex(data = sr.C3.val, aes(x = get(xband2), y = get(yband)), bins = 100) + 
-  geom_point(data = trainC3.df, aes(x = get(xband2), y = get(yband), color=classID, shape=classID), 
-             size = 2, inherit.aes = FALSE, alpha=1) + 
-  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
-  scale_x_continuous(xband2, limits=c(-10, quantile(sr.C3.val[xband2], 0.98, na.rm=T))) +
-  scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
-  scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
-  theme_bw()
-
-# Specify which bands to use for the x and y axis of the plot - Green band
-xband3 <- "green"
-
-# Create plot of band value density and training data
-ggplot() + 
-  geom_hex(data = sr.C3.val, aes(x = get(xband3), y = get(yband)), bins = 100) + 
-  geom_point(data = trainC3.df, aes(x = get(xband3), y = get(yband), color=classID, shape=classID), 
-             size = 2, inherit.aes = FALSE, alpha=1) + 
-  scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
-  scale_x_continuous(xband3, limits=c(-10, quantile(sr.C3.val[xband3], 0.98, na.rm=T))) +
-  scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
-  scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
-  theme_bw()
+# Merge spectral and glcm values
+trainC3.df <- merge(trainC3.df1,trainC3.df2, by = "id")
 
 
 
@@ -431,68 +461,14 @@ ggplot() +
 
 
 
-# Machine learning model: Random Forest
-# The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
-# Training data (dataframe): trainC3.df
-# stack: mosaic_C3
 
-# the randomForest() function expects the dependent variable to be of type factor.
-# Use as.factor() for conversion of the classID column.
-trainC3.df$classID <- as.factor(trainC3.df$classID)
-str(trainC3.df) #allows you to see the classes of the variables (all numeric)
 
-# Include only useful predictors in the model.
-trainC3_df <- select(trainC3.df, -c("id", "class_name","circ_num","coords.x1","coords.x2")) 
-# The RF algorithm cannot deal with NoData (NA) values. Remove NAs from the data.frame.
-is.na(trainC3_df) # check for null values
-sum(is.na(trainC3_df)) # check how many null values there are
-trainC3_df <- na.omit(trainC3_df)
-sum(is.na(trainC3_df))
 
-# Train a randomForest() classification model with the data.frame created in the prior step. 
-# The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
-# 1. Set a portion of the data aside for testing
-sample <- sample.split(trainC3.df$classID, SplitRatio = .80)
-train <- subset(trainC3.df, sample == TRUE)
-test <- subset(trainC3.df, sample == FALSE)
 
-# Check how many data points are per class
-train %>% group_by(classID) %>% count()
-test %>% group_by(classID) %>% count()
 
-# Check the dimension of the objects
-dim(train)
-dim(test)
 
-# 2. Model
-# Automated hyperparameter optimization
-# This part of the process uses the package: "e1071"
-# Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommended
-# to set it to a large number and compare across multiple runs of the model.
-# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
-# Number of variables (mtry): set the number of k-folds that will run to find the optimal parameter.
-# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
-# Other sources: https://www.youtube.com/watch?v=v5Bmz2eMd7M
 
-# Define accuracy from 5-fold cross-validation as optimization measure
-cv <- tune.control(cross = 5) 
 
-# Use tune.randomForest to assess the optimal combination of ntree and mtry
-RF_modelC3.tune500 <- tune.randomForest(classID~., data = train, ntree=500, mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.29%
-RF_modelC3.tune750 <- tune.randomForest(classID~., data = train, ntree=750, mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 53.46
-RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=1000, mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.11
-RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=1250, mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.21
-RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=1500, mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 54.42
-RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=1750, mtry=c(2:10), tunecontrol = cv)
-#OOB estimate of  error rate: 53.65
-
-# Store the best model in a new object for further use
-RF_modelC3 <- RF_modelC3.tune750$best.model
 
 ####
 # Model 2
@@ -525,14 +501,8 @@ plotRGB(mosaic_C3,"red","green","blue","NIR",stretch="lin")
 
 ###
 
-# 3. Model performance
-plot(RF_modelC3)
-print(RF_modelC3)
-RF_modelC3$err.rate[,1] # OOB estimate of  error rate
 
-# 4. Variable importance
-varImpPlot(RF_modelC3, sort=TRUE, main='Variable importance')
-varImp(RF_modelC3, scale = FALSE)
+
 
 # Red band
 partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
@@ -997,6 +967,80 @@ Map1_main +
 #     max.value = 255)
 #   
 # 
-# 
-# 
-# 
+# # # Plot the data in true colours and false composite.
+#   # DN
+#   # true colour composite
+#   rC_rgb <- stack(raster_mosaic$red, raster_mosaic$green, raster_mosaic$blue) %>% 
+#     plotRGB(.,axes=TRUE, stretch="lin")
+#   # false colour composite
+#   rC_false <- stack(raster_mosaic$NIR, raster_mosaic$red, raster_mosaic$green) %>% 
+#     plotRGB(.,axes=TRUE, stretch="lin")
+# # 
+# # 
+#   # Create 2D scatterplot of image data and locations of training points
+#   
+#   # Convert image to data.frame and remove missing values
+#   sr.C3.val <- data.frame(getValues(mosaic_C3))
+#   sr.C3.val <- na.omit(sr.C3.val)
+#   
+#   # Randomly sub-sample 1000 to speed up visualisation
+#   sr.C3.val <- sr.C3.val[sample(nrow(sr.C3.val), 1000),]  
+#   
+#   # Specify which bands to use for the x and y axis of the plot - Red band
+#   xband <- "red"
+#   yband <- "NIR"
+#   
+#   # Create plot of band value density and training data
+#   ggplot() + 
+#     geom_hex(data = sr.C3.val, aes(x = get(xband), y = get(yband)), bins = 100) + 
+#     geom_point(data = trainC3.df, aes(x = get(xband), y = get(yband), color=classID, shape=classID), 
+#                size = 2, inherit.aes = FALSE, alpha=1) + 
+#     scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+#     scale_x_continuous(xband, limits=c(-10, quantile(sr.C3.val[xband], 0.98, na.rm=T))) +
+#     scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
+#     scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
+#     theme_bw()
+#   
+#   # Specify which bands to use for the x and y axis of the plot - Blue band
+#   xband2 <- "blue"
+#   
+#   # Create plot of band value density and training data
+#   ggplot() + 
+#     geom_hex(data = sr.C3.val, aes(x = get(xband2), y = get(yband)), bins = 100) + 
+#     geom_point(data = trainC3.df, aes(x = get(xband2), y = get(yband), color=classID, shape=classID), 
+#                size = 2, inherit.aes = FALSE, alpha=1) + 
+#     scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+#     scale_x_continuous(xband2, limits=c(-10, quantile(sr.C3.val[xband2], 0.98, na.rm=T))) +
+#     scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
+#     scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
+#     theme_bw()
+#   
+#   # Specify which bands to use for the x and y axis of the plot - Green band
+#   xband3 <- "green"
+#   
+#   # Create plot of band value density and training data
+#   ggplot() + 
+#     geom_hex(data = sr.C3.val, aes(x = get(xband3), y = get(yband)), bins = 100) + 
+#     geom_point(data = trainC3.df, aes(x = get(xband3), y = get(yband), color=classID, shape=classID), 
+#                size = 2, inherit.aes = FALSE, alpha=1) + 
+#     scale_fill_gradientn(colours=c("black","white"), na.value=NA) + 
+#     scale_x_continuous(xband3, limits=c(-10, quantile(sr.C3.val[xband3], 0.98, na.rm=T))) +
+#     scale_y_continuous(yband, limits=c(-10, quantile(sr.C3.val[yband], 0.98, na.rm=T))) +
+#     scale_color_manual(values=c("red", "blue", "green", "purple","black","brown")) +
+#     theme_bw()
+  
+  
+  # Include only useful predictors in the model.
+  trainC3_df <- select(trainC3.df, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
+                                      "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
+  
+  
+  RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=1000, mtry=c(2:10), tunecontrol = cv)
+  #OOB estimate of  error rate: 54.11
+  RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=1250, mtry=c(2:10), tunecontrol = cv)
+  #OOB estimate of  error rate: 54.21
+  RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=1500, mtry=c(2:10), tunecontrol = cv)
+  #OOB estimate of  error rate: 54.42
+  RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=1750, mtry=c(2:10), tunecontrol = cv)
+  #OOB estimate of  error rate: 53.65
+#   
