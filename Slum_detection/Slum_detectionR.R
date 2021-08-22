@@ -336,9 +336,34 @@ varImpPlot(RF_modelC3, sort=TRUE, main='Variable importance')
 varImp(RF_modelC3, scale = FALSE)
 
 # Model Performance
-# Kohen's Kappa
-forest_kappa(RF_modelC3)
+# Extract the predictions from the model, using the test dataset
+predClass <- predict(RF_modelC3, test)
+predClass
 
+# Use as.factor() for conversion of the classID column in the test dataset
+test_acc <- as.factor(test$classID) 
+
+# Assess the accuracy from the confusion matrix
+confusionMatrix(predClass, test_acc)
+
+# Perform a classification of the image stack using the predict() function. 
+# Run predict() to store RF predictions
+map <- predict(mosaic_C3, RF_modelC3)
+
+# Plot raster
+plot(map)
+freq(map)
+
+# Write classification to disk
+writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
+
+# Calculate class probabilities for each pixel.
+# Run predict() to store RF probabilities for class 1-6
+RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+
+# Plot raster of class: informal settlement Type II
+plot(RF_modelC3_p)
+freq(RF_modelC3_p)
 
 
 
