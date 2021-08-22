@@ -284,11 +284,15 @@ trainC3_df <- na.omit(trainC3_df)
 sum(is.na(trainC3_df))
 
 # Train a randomForest() classification model with the data.frame created in the prior step. 
-# The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
-# 1. Set a portion of the data aside for testing
-sample <- sample.split(trainC3_df$classID, SplitRatio = .80)
-train <- subset(trainC3_df, sample == TRUE)
-test <- subset(trainC3_df, sample == FALSE)
+# The code for this section can be found in this source: 
+# https://stackoverflow.com/questions/20776887/stratified-splitting-the-data/30181396
+# https://pages.cms.hu-berlin.de/EOL/gcg_eo/06_accuracy_assessment.html
+# createDataPartition does a stratified random split of the data.
+# Stratified random sampling helps us to validate the map using a sufficient amount of samples for each for the four classes
+# Set a portion of the data aside for testing
+sample <- createDataPartition(trainC3_df$classID, p = .80, list = FALSE)
+train <- trainC3_df[sample,]
+test <- trainC3_df[-sample,]
 
 # Check how many data points are per class
 train %>% group_by(classID) %>% count()
@@ -298,7 +302,8 @@ test %>% group_by(classID) %>% count()
 dim(train)
 dim(test)
 
-# 2. Model
+
+# Model
 # Random Forest. Automated hyperparameter optimisation.
 # This part of the process uses the package: "e1071". We will optimise the mtry parameter.
 # Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommended
@@ -366,52 +371,10 @@ plot(RF_modelC3_p)
 freq(RF_modelC3_p)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-########
-
-# NDVI
-# Let’s make a function called NDVIfun
-NDVIfun <- function(NIR, Red) {
-  NDVI <- (NIR - Red) / (NIR + Red)
-  return(NDVI)
-}
-
-# Call the function
-source('NDVIfun')
-
-# Calculate NDVI
-ndvi <- NDVIfun(mosaic_C3$NIR, mosaic_C3$red)
-
-# plot
-ndvi %>%
-  plot(.,col = rev(terrain.colors(10)), main = "NDVI")
-
-# Let's look at the histogram for this dataset
-ndvi %>%
-  hist(., breaks = 40, main = "NDVI Histogram", xlim = c(-.3,.8))
-
-veg <- ndvi %>%
-  reclassify(., cbind(-Inf, 0.3, NA))
-
-veg %>%
-  plot(.,main = 'Possible Veg cover')
-
-
-
-#######
-# GLCM
-# Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis
+# Now, we will add texture features to see if it improves the slum detection. 
+# GLCM - Gray level co-occurrence matrix
+# This code follows the methodology of: https://ieeexplore.ieee.org/document/7447704
+# Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis,
 # Calculate using default 90 degree shift textures_shift1 <- glcm(raster(L5TSR_1986, layer=1)) plot(textures_shift1)
 # Convert mosaic into a grayscale
 mosaic_C3g <- grayscale(mosaic_C3, method = "XYZ", drop = FALSE)
@@ -459,25 +422,126 @@ plot(texturesNIR)
 mosaic_C3glcm <- stack(texturesRed, texturesGreen, texturesBlue, texturesNIR)
 
 # Develop a PCA model
-mosaic_C3PCA < -scale(mosaic_C3glcm)        # scale the data
-mosaic_C3PCA[is.na(mosaic_C3PCA)] <- 0  # define zero  all miising vaalues
-mosaic_C3PCAmodel <- rasterPCA(mosaic_C3PCA, nComp=4)
-summary(mosaic_C3PCAmodel$model)
+mosaic_C3glcm2 <- scale(mosaic_C3glcm)        # scale the data
+mosaic_C3glcm2[is.na(mosaic_C3glcm2)] <- 0  # define zero  all missing values
+mosaic_C3PCA <- rasterPCA(mosaic_C3glcm2, nComp=4)
+summary(mosaic_C3PCA$model)
 
 # Extract first 2 PCs from the model
 # Since, the first two PCs account for more of the variability of these textures (see standard deviation)
 # we will extract these 2 components.
 # The values from these raster layers will be used as features for our classification.
-PC1 <- mosaic_C3PCAmodel$map$PC1
-PC2 <- mosaic_C3PCAmodel$map$PC2
+PCA1 <- mosaic_C3PCA$map$PC1
+PCA2 <- mosaic_C3PCA$map$PC2
 
 # Stack into one raster.
-PC_glcm <- stack(PC1, PC2)
+PC_glcm <- stack(PCA1, PCA2)
+
+# Plot
+plot(PC_glcm)
+
+# Stack with the original mosaic
+mosaic_C3ST <- stack(mosaic_C3, PC_glcm)
 
 
+# Random Forest model: Spectral + Texture values
+# Extract image values at training point locations
+trainC3.spGLCM <- raster::extract(PC_glcm, trainC3, sp=T)
+
+# Convert to data.frame 
+trainC3.dfGLCM <- as.data.frame(trainC3.spGLCM)
 
 # Merge spectral and glcm values
-trainC3.df <- merge(trainC3.df1,trainC3.df2, by = "id")
+trainC3.dfST <- merge(trainC3.df,trainC3.dfGLCM, by = "id")
+
+# Rename column classID.x as classID
+names(trainC3.dfST)[2] <- 'classID'
+
+# the randomForest() function expects the dependent variable to be of type factor.
+# Use as.factor() for conversion of the classID column.
+trainC3.dfST$classID <- as.factor(trainC3.dfST$classID) 
+str(trainC3.dfST) # allows you to see the classes of the variables (all numeric)
+
+# Include only useful predictors in the model.
+trainC3_dfST <- select(trainC3.dfST, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
+                                    "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
+# The RF algorithm cannot deal with NoData (NA) values. Remove NAs from the data.frame.
+is.na(trainC3_dfST) # check for null values
+sum(is.na(trainC3_dfST)) # check how many null values there are
+trainC3_dfST <- na.omit(trainC3_dfST)
+sum(is.na(trainC3_dfST))
+
+# Train a randomForest() classification model with the data.frame created in the prior step. 
+# 1. Set a portion of the data aside for testing
+sampleST <- createDataPartition(trainC3_dfST$classID, p = .80, list = FALSE)
+trainST <- trainC3_dfST[sampleST,]
+testST <- trainC3_dfST[-sampleST,]
+
+# Check how many data points are per class
+trainST %>% group_by(classID) %>% count()
+testST %>% group_by(classID) %>% count()
+
+# Check the dimension of the objects
+dim(trainST)
+dim(testST)
+
+# RF Model
+# Define accuracy from 10-fold cross-validation as optimization measure
+cvST <- tune.control(cross = 10) 
+
+# Use tune.randomForest to assess the optimal combination of ntree and mtry
+RF_modelC3ST.tune <- tune.randomForest(classID~., 
+                                     data = trainST, 
+                                     ntree=750, 
+                                     mtry=c(2:10), 
+                                     importance = TRUE,
+                                     tunecontrol = cvST)
+#OOB estimate of  error rate: 48.16%
+
+# Store the best model in a new object for further use
+RF_modelC3ST <- RF_modelC3ST.tune$best.model
+print(RF_modelC3ST)
+
+# Check at which number of trees the model stabilises. 
+plot(RF_modelC3ST) 
+
+# Error rate
+RF_modelC3ST$err.rate[,1] # OOB estimate of  error rate
+
+# Variable importance
+# Check which variables provide more information
+varImpPlot(RF_modelC3ST, sort=TRUE, main='Variable importance')
+varImp(RF_modelC3ST, scale = FALSE)
+
+# Model Performance
+# Extract the predictions from the model, using the test dataset
+predClassST <- predict(RF_modelC3ST, testST)
+predClassST
+
+# Use as.factor() for conversion of the classID column in the test dataset
+test_accST <- as.factor(testST$classID) 
+
+# Assess the accuracy from the confusion matrix
+confusionMatrix(predClassST, test_accST)
+
+# Perform a classification of the image stack using the predict() function. 
+# Run predict() to store RF predictions
+mapST <- predict(mosaic_C3ST, RF_modelC3ST)
+
+# Plot raster
+plot(mapST)
+freq(mapST)
+
+# Write classification to disk
+writeRaster(mapST, filename="predicted_mapST", datatype="INT1S", overwrite=T)
+
+# Calculate class probabilities for each pixel.
+# Run predict() to store RF probabilities for class 1-6
+RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
+
+# Plot raster of class: informal settlement Type II
+plot(RF_modelC3_pST)
+freq(RF_modelC3_pST)
 
 
 
@@ -495,36 +559,32 @@ trainC3.df <- merge(trainC3.df1,trainC3.df2, by = "id")
 
 
 
-####
-# Model 2
-cv2 <- trainControl(method = "cv",
-                    number = 10,
-                    savePredictions = TRUE)
-rfGrid <- expand.grid(mtry = (2:4))
-RF_modelC32 <- train(classID~., data = train,
-                     method = "rf",
-                     trControl = cv2,
-                     verbose = TRUE,
-                     tuneGrid = rfGrid,
-                     importance = TRUE)
-RF_modelC32
-plot(RF_modelC32)
-varImp(RF_modelC32, scale = FALSE)
 
 
-predicted_class_test <- predict(RF_modelC32, test)
-predicted_class_test
-test[1]
-confusionMatrix(predicted_class_test, test[1])
 
-classified <- predict(mosaic_C3,
-                      RF_modelC32)
-classified
-par(mfrow=c(1,2))
-plot(classified)
-plotRGB(mosaic_C3,"red","green","blue","NIR",stretch="lin")
 
-###
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1069,3 +1129,68 @@ Map1_main +
   RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=1750, mtry=c(2:10), tunecontrol = cv)
   #OOB estimate of  error rate: 53.65
 #   
+  ########
+  
+  # NDVI
+  # Let’s make a function called NDVIfun
+  NDVIfun <- function(NIR, Red) {
+    NDVI <- (NIR - Red) / (NIR + Red)
+    return(NDVI)
+  }
+  
+  # Call the function
+  source('NDVIfun')
+  
+  # Calculate NDVI
+  ndvi <- NDVIfun(mosaic_C3$NIR, mosaic_C3$red)
+  
+  # plot
+  ndvi %>%
+    plot(.,col = rev(terrain.colors(10)), main = "NDVI")
+  
+  # Let's look at the histogram for this dataset
+  ndvi %>%
+    hist(., breaks = 40, main = "NDVI Histogram", xlim = c(-.3,.8))
+  
+  veg <- ndvi %>%
+    reclassify(., cbind(-Inf, 0.3, NA))
+  
+  veg %>%
+    plot(.,main = 'Possible Veg cover')
+  
+  
+  
+  #######
+  
+  
+  # Train a randomForest() classification model with the data.frame created in the prior step. 
+  # The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
+  # # 1. Set a portion of the data aside for testing
+  # sampleST <- sample.split(trainC3_dfST$classID, SplitRatio = .80)
+  # trainST <- subset(trainC3_dfST, sample == TRUE)
+  # testST <- subset(trainC3_dfST, sample == FALSE)
+  # 
+  # # Check how many data points are per class
+  # trainST %>% group_by(classID) %>% count()
+  # testST %>% group_by(classID) %>% count()
+  # 
+  # # Check the dimension of the objects
+  # dim(trainST)
+  # dim(testST)
+  
+  # 
+  # # Train a randomForest() classification model with the data.frame created in the prior step. 
+  # # The code for this section can be found in this source: https://towardsdatascience.com/random-forest-in-r-f66adf80ec9
+  # # 1. Set a portion of the data aside for testing
+  # sample <- sample.split(trainC3_df$classID, SplitRatio = .80)
+  # train <- subset(trainC3_df, sample == TRUE)
+  # test <- subset(trainC3_df, sample == FALSE)
+  # 
+  # # Check how many data points are per class
+  # train %>% group_by(classID) %>% count()
+  # test %>% group_by(classID) %>% count()
+  # 
+  # # Check the dimension of the objects
+  # dim(train)
+  # dim(test)
+  
