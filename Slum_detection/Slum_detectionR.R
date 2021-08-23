@@ -49,6 +49,7 @@ library(RStoolbox)
 library(ggsn)
 library(ggspatial)
 library(grid)
+library(cowplot) # to arrange inset maps
 library(glcm) # to create GLCM model
 library(imager) # to convert RGB raster in grayscale
 library(wilsontom/modelmisc) # for kappa accuracy
@@ -419,27 +420,27 @@ A <- sum(maparea)
 W_i <- maparea / A
 # number of reference points per class
 n_i <- rowSums(confmat) 
-# population error matrix (Eq.4)
+# population error matrix
 p <- W_i * confmat / n_i
 p[is.na(p)] <- 0
 
 # area estimation
 p_area <- colSums(p) * A
-# area estimation confidence interval (Eq.10)
+# area estimation confidence interval
 p_area_CI <- conf * A * sqrt(colSums((W_i * p - p ^ 2) / (n_i - 1)))
 
-# overall accuracy (Eq.1)
+# overall accuracy
 OA <- sum(diag(p))
-# producers accuracy (Eq.2)
+# producers accuracy
 PA <- diag(p) / colSums(p)
-# users accuracy (Eq.3)
+# users accuracy
 UA <- diag(p) / rowSums(p)
 
-# overall accuracy confidence interval (Eq.5)
+# overall accuracy confidence interval 
 OA_CI <- conf * sqrt(sum(W_i ^ 2 * UA * (1 - UA) / (n_i - 1)))
-# user accuracy confidence interval (Eq.6)
+# user accuracy confidence interval 
 UA_CI <- conf * sqrt(UA * (1 - UA) / (n_i - 1)) 
-# producer accuracy confidence interval (Eq.7)
+# producer accuracy confidence interval 
 N_j <- sapply(1:nclass, function(x) sum(maparea / n_i * confmat[ , x]) )
 tmp <- sapply(1:nclass, function(x) sum(maparea[-x] ^ 2 * confmat[-x, x] / n_i[-x] * ( 1 - confmat[-x, x] / n_i[-x]) / (n_i[-x] - 1)) )
 PA_CI <- conf * sqrt(1 / N_j ^ 2 * (maparea ^ 2 * ( 1 - PA ) ^ 2 * UA * (1 - UA) / (n_i - 1) + PA ^ 2 * tmp))
@@ -648,7 +649,7 @@ imgVal_ST <- na.omit(imgVal_ST)
 # Extract the number of classes
 nclass_ST <- length(unique(trainST$classID))
 # Calculate the total area per class
-maparea_ST <- sapply(1:nclass_ST, function(x) sum(imgValST == x))
+maparea_ST <- sapply(1:nclass_ST, function(x) sum(imgVal_ST == x))
 # Transform area in km2
 maparea_ST <- maparea_ST * res(mapST)[1] ^ 2 / 1000000
 
@@ -663,27 +664,27 @@ A_ST <- sum(maparea_ST)
 W_i_ST <- maparea_ST / A_ST
 # number of reference points per class
 n_i_ST <- rowSums(confmat_ST) 
-# population error matrix (Eq.4)
+# population error matrix 
 p_ST <- W_i_ST * confmat_ST / n_i_ST
 p_ST[is.na(p_ST)] <- 0
 
 # area estimation
 p_area_ST <- colSums(p_ST) * A_ST
-# area estimation confidence interval (Eq.10)
+# area estimation confidence interval 
 p_area_CI_ST <- conf_ST * A_ST * sqrt(colSums((W_i_ST * p_ST - p_ST ^ 2) / (n_i_ST - 1)))
 
-# overall accuracy (Eq.1)
+# overall accuracy 
 OA_ST <- sum(diag(p_ST))
-# producers accuracy (Eq.2)
+# producers accuracy 
 PA_ST <- diag(p_ST) / colSums(p_ST)
-# users accuracy (Eq.3)
+# users accuracy 
 UA_ST <- diag(p_ST) / rowSums(p_ST)
 
-# overall accuracy confidence interval (Eq.5)
+# overall accuracy confidence interval 
 OA_CI_ST <- conf_ST * sqrt(sum(W_i_ST ^ 2 * UA_ST * (1 - UA_ST) / (n_i_ST - 1)))
-# user accuracy confidence interval (Eq.6)
-UA_CI <- conf_ST * sqrt(UA_ST * (1 - UA_ST) / (n_i_ST - 1)) 
-# producer accuracy confidence interval (Eq.7)
+# user accuracy confidence interval 
+UA_CI_ST <- conf_ST * sqrt(UA_ST * (1 - UA_ST) / (n_i_ST - 1)) 
+# producer accuracy confidence interval 
 N_j_ST <- sapply(1:nclass_ST, function(x) sum(maparea_ST / n_i_ST * confmat_ST[ , x]) )
 tmp_ST <- sapply(1:nclass_ST, function(x) sum(maparea_ST[-x] ^ 2 * confmat_ST[-x, x] / n_i_ST[-x] * ( 1 - confmat_ST[-x, x] / n_i_ST[-x]) / (n_i_ST[-x] - 1)) )
 PA_CI_ST<- conf_ST * sqrt(1 / N_j_ST ^ 2 * (maparea_ST ^ 2 * ( 1 - PA_ST ) ^ 2 * UA_ST * (1 - UA_ST) / (n_i - 1) + PA_ST ^ 2 * tmp_ST))
@@ -695,136 +696,6 @@ rownames(result_ST) <- levels(as.factor(trainST$classID))
 colnames(result_ST) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
 class(result_ST) <- "table"
 result_ST
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Red band
-partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
-partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
-partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
-
-# 5. Accuracy assessment with test data
-predicted_class_test <- predict(RF_modelC3, test)
-predicted_class_test
-test[,4]
-confusionMatrix(predicted_class_test, test)
-
-# 6. Perform a classification of the image stack using the predict() function. 
-# The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
-# Run predict() to store RF predictions
-map <- predict(mosaic_C3, RF_modelC3)
-
-
-# Plot raster
-plot(map)
-freq(map)
-
-# Write classification to disk
-writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
-
-# 6. Calculate class probabilities for each pixel.
-# Run predict() to store RF probabilities for class 1-6
-RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
-
-# Plot raster of class: informal settlement Type II
-plot(RF_modelC3_p$layer.2)
-
-freq(RF_modelC3_p)
-
-# Scale probabilities to integer values 0-100 and write to disk
-writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
-
-
-
-
-
-
-# Extract image values at training point locations
-predictC3.sr <- raster::extract(map, trainC3, sp=T)
-
-# Convert to data.frame and convert classID into factor
-predictC3.df <- as.data.frame(predictC3.sr)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Create a stratified reference sample using sampleStratified()
-
-strat_smpl <- sampleStratified(map, size = 50, sp = TRUE, na.rm = TRUE)
-
-writeOGR()
-
-plot(strat_smpl)
-
-
-# 
-
-
-
-
-
-# Other Method
-# https://www.youtube.com/watch?v=ww8KWgT98Hw
-set.seed(42) # allows reproducibility to a process with a random component (random forest)
-# Set the train control parameters. Method: cross validation, 5 k-folds, verboseIter = True (to print everything)
-trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
-
-rf.model2 <- train(classID~., data=train, method= "ranger",
-                   tuneLength = 10,
-                   preProcess = c("center", "scale"),
-                   trControl = trainctrl,
-                   metric = "Kappa")
-
 
 
 
@@ -848,6 +719,12 @@ DNc_points <- sf::st_point_on_surface(dn_circ)
 DNc_coords <- as.data.frame(sf::st_coordinates(DNc_points))
 DNc_coords$Label <- dn_circ$TOPONIMIA
 
+# Get XY coordinates
+
+c3_boundary <- c3_boundary %>% 
+  cbind(st_coordinates(.)) # get X and Y coordinates
+
+
 
 # Map of Study Area
 Map1_main <- ggplot() +
@@ -857,7 +734,7 @@ Map1_main <- ggplot() +
         b = 1,
       stretch = "lin",
       ggLayer = TRUE) +
-  geom_sf(data = c3_boundary,
+  geom_sf(data = c3_boundary, #aes(x =, y=y),
           fill = alpha("#fed98e",0.4)) +
   theme_minimal() +
   labs(x="", 
@@ -866,6 +743,7 @@ Map1_main <- ggplot() +
           fill = NA,
           lwd = 0.3,
           colour = "#cc4c02") +
+  scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff'))
   geom_text(data = DNc_coords,
              aes(X,Y,
                  label= Label),
@@ -879,6 +757,9 @@ Map1_main <- ggplot() +
   north(data=dn_circ,
         location= "bottomright",
         symbol = 10)
+
+scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
+  scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
 
 # Inset map
 Map1_loc <- ggplot() +
@@ -901,18 +782,94 @@ Map1_loc <- ggplot() +
         axis.text=element_blank(), axis.ticks=element_blank()) +
   labs(x="", y="") 
 
+
+
 # Combine the main map with the inset map.
+Map1 <- ggdraw() +
+  draw_plot(Map1_main) +
+  draw_plot(Map1_loc, x = 0.73, y = 0.01, width = 0.3, height = 0.3)
+
+Map1
+
+# This will save the map in the same path as the project.
+ggsave("Map1.png",
+       plot=Map1,
+       dpi = 600)
+
+
+
+
+
 Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
                     ymin = -1, ymax=1, xmin=1, xmax=1)
 plot(Map1)
 
-# Map 2 - Classification maps
+
+
+tm_shape(raster_mosaicLIN) +
+  tm_rgba(
+    r = 1,
+    g = 2,
+    b = 3,
+    a = 4)
+    interpolate = FALSE, max.value = 1)
+
+
+raster_mosaicLIN <- raster::stretch(raster_mosaic, minq=0, maxq=1)
+
+
+
+
+
+
+
+# Map 2 - Training data
+
+# Get X and Y coordinates
+trainC3_plot <- trainC3 %>% 
+  cbind(st_coordinates(.)) 
+
+# Set the map's properties
+Map2 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  # geom_point(data = trainC3_plot, aes(X, Y),
+  #         colour = trainC3_plot$classID) +
+  theme_minimal() +
+  labs(x="", 
+       y="") +
+  theme(legend.position="bottom") +
+  scalebar(dn_circ, dist = 5, dist_unit = "km", location = "bottomright",
+           transform = TRUE) +
+  # annotation_scale(plot_unit = "km",
+  #                  aes(location = "br")) +
+  north(data=dn_circ,
+        location= "bottomright",
+        symbol = 10)
+
+scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
+  scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
+
+
+# Map  - Classification maps
 # map and mapST
 plot(map)
 plot(mapST)
 
 # convert raster in data frame
-mapdf = as.data.frame(map$layer, xy = T)
+mapVal <-  rasterToPoints(map)    # as.data.frame(map$layer, xy = T)
+mapdf <- data.frame(mapVal)
+colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
+
+ggplot(data=mapdf, aes(y=Latitude, x=Longitude)) +
+  geom_raster(aes(fill=classID))+
+  theme_minimal() +
+  labs(x="", 
+       y="")
 
 
 
@@ -926,12 +883,23 @@ rat$class <- c('1', '2', '3', '4', '5', '6')
 levels(map) <- rat
 # remove na values
 
+
+
+
+
+
+
+
+
+
+
+
 # Do the same for the second map
 mapST <- ratify(mapST)
 levels(mapST) <- rat
 
 
-Map2 <- 
+Map <- 
 
 gplot(map) +
   geom_tile(aes(fill = factor(value, labels = c('Informal Type I','Informal Type II', 'Informal Type III',
@@ -977,15 +945,13 @@ Map2a <- ggplot() +
 
 
 
-# Map 3 - Informal settlements
+# Map  - Informal settlements
 
 slums <- map %>%
   reclassify(., cbind(-Inf, 0.3, NA))
 
 slums %>%
   plot(.,main = 'Possible Veg cover')
-
-
 
 
 
@@ -1406,5 +1372,83 @@ slums %>%
             legend.outside.position = "right",
             legend.text.size = 0.5,
             legend.height = 0.5)
+  
+  ######
+  
+  # Red band
+  partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
+  partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
+  partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
+  
+  # 5. Accuracy assessment with test data
+  predicted_class_test <- predict(RF_modelC3, test)
+  predicted_class_test
+  test[,4]
+  confusionMatrix(predicted_class_test, test)
+  
+  # 6. Perform a classification of the image stack using the predict() function. 
+  # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
+  # Run predict() to store RF predictions
+  map <- predict(mosaic_C3, RF_modelC3)
+  
+  
+  # Plot raster
+  plot(map)
+  freq(map)
+  
+  # Write classification to disk
+  writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
+  
+  # 6. Calculate class probabilities for each pixel.
+  # Run predict() to store RF probabilities for class 1-6
+  RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+  
+  # Plot raster of class: informal settlement Type II
+  plot(RF_modelC3_p$layer.2)
+  
+  freq(RF_modelC3_p)
+  
+  # Scale probabilities to integer values 0-100 and write to disk
+  writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
+  
+  
+  
+  
+  
+  
+  # Extract image values at training point locations
+  predictC3.sr <- raster::extract(map, trainC3, sp=T)
+  
+  # Convert to data.frame and convert classID into factor
+  predictC3.df <- as.data.frame(predictC3.sr)
+  
+  
+  # Create a stratified reference sample using sampleStratified()
+  
+  strat_smpl <- sampleStratified(map, size = 50, sp = TRUE, na.rm = TRUE)
+  
+  writeOGR()
+  
+  plot(strat_smpl)
+  
+  
+  # 
+  
+  
+  
+  
+  
+  # Other Method
+  # https://www.youtube.com/watch?v=ww8KWgT98Hw
+  set.seed(42) # allows reproducibility to a process with a random component (random forest)
+  # Set the train control parameters. Method: cross validation, 5 k-folds, verboseIter = True (to print everything)
+  trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
+  
+  rf.model2 <- train(classID~., data=train, method= "ranger",
+                     tuneLength = 10,
+                     preProcess = c("center", "scale"),
+                     trControl = trainctrl,
+                     metric = "Kappa")
+  
   
   
