@@ -371,6 +371,12 @@ OA
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
 
+mapttest <- map
+mapttest[mapttest == 0] <- NA
+trim(mapttest)
+crop(mapttest, c3_boundary)
+
+freq(mapttest)
 # Plot raster
 plot(map)
 freq(map)
@@ -378,13 +384,73 @@ freq(map)
 # Write classification to disk
 writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
 
-# Calculate class probabilities for each pixel.
-# Run predict() to store RF probabilities for class 1-6
-RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+# # Calculate class probabilities for each pixel.
+# # Run predict() to store RF probabilities for class 1-6
+# RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+# 
+# # Plot raster of class: informal settlement Type II
+# plot(RF_modelC3_p)
+# freq(RF_modelC3_p)
 
-# Plot raster of class: informal settlement Type II
-plot(RF_modelC3_p)
-freq(RF_modelC3_p)
+# Area Adjusted Accuracy assessment
+# Calculated as in Olofsson et al. 2014
+# Code source: https://blogs.fu-berlin.de/reseda/area-adjusted-accuracies/
+# We will use the previous accuracy matrix: 
+confmat <- accmat
+# get number of pixels per class and convert in km²
+imgVal <- as.factor(getValues(map))
+# Remove NA values from the classified dataset 
+imgVal <- na.omit(imgVal)
+# Extract the number of classes
+nclass <- length(unique(train$classID))
+# Calculate the total area per class
+maparea <- sapply(1:nclass, function(x) sum(imgVal == x))
+# Transform area in km2
+maparea <- maparea * res(map)[1] ^ 2 / 1000000
+
+# Set confidence interval
+# 1.96 for a 95% confidence interval, or 1.645 for a 90% confidence interval.
+# See more here: http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
+conf <- 1.96
+
+# total  map area
+A <- sum(maparea)
+# proportion of area mapped as class i
+W_i <- maparea / A
+# number of reference points per class
+n_i <- rowSums(confmat) 
+# population error matrix (Eq.4)
+p <- W_i * confmat / n_i
+p[is.na(p)] <- 0
+
+# area estimation
+p_area <- colSums(p) * A
+# area estimation confidence interval (Eq.10)
+p_area_CI <- conf * A * sqrt(colSums((W_i * p - p ^ 2) / (n_i - 1)))
+
+# overall accuracy (Eq.1)
+OA <- sum(diag(p))
+# producers accuracy (Eq.2)
+PA <- diag(p) / colSums(p)
+# users accuracy (Eq.3)
+UA <- diag(p) / rowSums(p)
+
+# overall accuracy confidence interval (Eq.5)
+OA_CI <- conf * sqrt(sum(W_i ^ 2 * UA * (1 - UA) / (n_i - 1)))
+# user accuracy confidence interval (Eq.6)
+UA_CI <- conf * sqrt(UA * (1 - UA) / (n_i - 1)) 
+# producer accuracy confidence interval (Eq.7)
+N_j <- sapply(1:nclass, function(x) sum(maparea / n_i * confmat[ , x]) )
+tmp <- sapply(1:nclass, function(x) sum(maparea[-x] ^ 2 * confmat[-x, x] / n_i[-x] * ( 1 - confmat[-x, x] / n_i[-x]) / (n_i[-x] - 1)) )
+PA_CI <- conf * sqrt(1 / N_j ^ 2 * (maparea ^ 2 * ( 1 - PA ) ^ 2 * UA * (1 - UA) / (n_i - 1) + PA ^ 2 * tmp))
+
+# gather results
+result <- matrix(c(p_area, p_area_CI, PA * 100, PA_CI * 100, UA * 100, UA_CI * 100, c(OA * 100, rep(NA, nclass-1)), c(OA_CI * 100, rep(NA, nclass-1))), nrow = nclass)
+result <- round(result, digits = 2) 
+rownames(result) <- levels(as.factor(train$classID))
+colnames(result) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
+class(result) <- "table"
+result
 
 
 # Now, we will add texture features to see if it improves the slum detection. 
@@ -392,9 +458,6 @@ freq(RF_modelC3_p)
 # This code follows the methodology of: https://ieeexplore.ieee.org/document/7447704
 # Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis,
 # Calculate using default 90 degree shift textures_shift1 <- glcm(raster(L5TSR_1986, layer=1)) plot(textures_shift1)
-# Convert mosaic into a grayscale
-mosaic_C3g <- grayscale(mosaic_C3, method = "XYZ", drop = FALSE)
-
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
@@ -546,13 +609,13 @@ confusionMatrix(predClassST, test_accST)
 accmat_ST <- table("pred" = predClassST, "ref" = test_accST)
 accmat_ST
 # User's accuracy
-UA_ST <- diag(accmat) / rowSums(accmat) * 100
+UA_ST <- diag(accmat_ST) / rowSums(accmat_ST) * 100
 UA_ST
 # Producer's accuracy
-PA_ST <- diag(accmat) / colSums(accmat) * 100
+PA_ST <- diag(accmat_ST) / colSums(accmat_ST) * 100
 PA_ST
 # Overall accuracy
-OA_ST <- sum(diag(accmat)) / sum(accmat) * 100
+OA_ST <- sum(diag(accmat_ST)) / sum(accmat_ST) * 100
 OA_ST
 
 # Perform a classification of the image stack using the predict() function. 
@@ -576,73 +639,63 @@ writeRaster(mapST, filename="predicted_mapST", datatype="INT1S", overwrite=T)
 
 
 # Area Adjusted Accuracy assessment
-# Calculated as in Olofsson et al. 2014
-# Code source: https://blogs.fu-berlin.de/reseda/area-adjusted-accuracies/
-# create regular accuracy matrix 
-
-
-
-# Extract image values at training point locations
-trainC3.spGLCM <- raster::extract(PC_glcm, trainC3, sp=T)
-
-# Convert to data.frame 
-trainC3.dfGLCM <- as.data.frame(trainC3.spGLCM)
-
-
-rrr <- raster::extract(mapST, testST,sp=T)
-confmat <- table(as.factor(extract(mapST, testST)), as.factor(testST$classID))
-
-
-
-
-
+# We will use the previous accuracy matrix: 
+confmat_ST <- accmat_ST
 # get number of pixels per class and convert in km²
-imgVal <- as.factor(getValues(mapST))
-nclass <- length(unique(trainST$classID))
-maparea <- sapply(1:nclass, function(x) sum(imgVal == x))
-maparea <- maparea * res(mapST)[1] ^ 2 / 1000000
+imgVal_ST <- as.factor(getValues(mapST))
+# Remove NA values from the classified dataset 
+imgVal_ST <- na.omit(imgVal_ST)
+# Extract the number of classes
+nclass_ST <- length(unique(trainST$classID))
+# Calculate the total area per class
+maparea_ST <- sapply(1:nclass_ST, function(x) sum(imgValST == x))
+# Transform area in km2
+maparea_ST <- maparea_ST * res(mapST)[1] ^ 2 / 1000000
 
-# set confidence interval
-conf <- 1.96
+# Set confidence interval
+# 1.96 for a 95% confidence interval, or 1.645 for a 90% confidence interval.
+# See more here: http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
+conf_ST <- 1.96
 
 # total  map area
-A <- sum(maparea)
+A_ST <- sum(maparea_ST)
 # proportion of area mapped as class i
-W_i <- maparea / A
+W_i_ST <- maparea_ST / A_ST
 # number of reference points per class
-n_i <- rowSums(confmat) 
+n_i_ST <- rowSums(confmat_ST) 
 # population error matrix (Eq.4)
-p <- W_i * confmat / n_i
-p[is.na(p)] <- 0
+p_ST <- W_i_ST * confmat_ST / n_i_ST
+p_ST[is.na(p_ST)] <- 0
 
 # area estimation
-p_area <- colSums(p) * A
+p_area_ST <- colSums(p_ST) * A_ST
 # area estimation confidence interval (Eq.10)
-p_area_CI <- conf * A * sqrt(colSums((W_i * p - p ^ 2) / (n_i - 1)))
+p_area_CI_ST <- conf_ST * A_ST * sqrt(colSums((W_i_ST * p_ST - p_ST ^ 2) / (n_i_ST - 1)))
 
 # overall accuracy (Eq.1)
-OA <- sum(diag(p))
+OA_ST <- sum(diag(p_ST))
 # producers accuracy (Eq.2)
-PA <- diag(p) / colSums(p)
+PA_ST <- diag(p_ST) / colSums(p_ST)
 # users accuracy (Eq.3)
-UA <- diag(p) / rowSums(p)
+UA_ST <- diag(p_ST) / rowSums(p_ST)
 
 # overall accuracy confidence interval (Eq.5)
-OA_CI <- conf * sqrt(sum(W_i ^ 2 * UA * (1 - UA) / (n_i - 1)))
+OA_CI_ST <- conf_ST * sqrt(sum(W_i_ST ^ 2 * UA_ST * (1 - UA_ST) / (n_i_ST - 1)))
 # user accuracy confidence interval (Eq.6)
-UA_CI <- conf * sqrt(UA * (1 - UA) / (n_i - 1)) 
+UA_CI <- conf_ST * sqrt(UA_ST * (1 - UA_ST) / (n_i_ST - 1)) 
 # producer accuracy confidence interval (Eq.7)
-N_j <- sapply(1:nclass, function(x) sum(maparea / n_i * confmat[ , x]) )
-tmp <- sapply(1:nclass, function(x) sum(maparea[-x] ^ 2 * confmat[-x, x] / n_i[-x] * ( 1 - confmat[-x, x] / n_i[-x]) / (n_i[-x] - 1)) )
-PA_CI <- conf * sqrt(1 / N_j ^ 2 * (maparea ^ 2 * ( 1 - PA ) ^ 2 * UA * (1 - UA) / (n_i - 1) + PA ^ 2 * tmp))
+N_j_ST <- sapply(1:nclass_ST, function(x) sum(maparea_ST / n_i_ST * confmat_ST[ , x]) )
+tmp_ST <- sapply(1:nclass_ST, function(x) sum(maparea_ST[-x] ^ 2 * confmat_ST[-x, x] / n_i_ST[-x] * ( 1 - confmat_ST[-x, x] / n_i_ST[-x]) / (n_i_ST[-x] - 1)) )
+PA_CI_ST<- conf_ST * sqrt(1 / N_j_ST ^ 2 * (maparea_ST ^ 2 * ( 1 - PA_ST ) ^ 2 * UA_ST * (1 - UA_ST) / (n_i - 1) + PA_ST ^ 2 * tmp_ST))
 
 # gather results
-result <- matrix(c(p_area, p_area_CI, PA * 100, PA_CI * 100, UA * 100, UA_CI * 100, c(OA * 100, rep(NA, nclass-1)), c(OA_CI * 100, rep(NA, nclass-1))), nrow = nclass)
-result <- round(result, digits = 2) 
-rownames(result) <- levels(as.factor(shp.train$classes))
-colnames(result) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
-class(result) <- "table"
-result
+result_ST <- matrix(c(p_area_ST, p_area_CI_ST, PA_ST * 100, PA_CI_ST * 100, UA_ST * 100, UA_CI_ST * 100, c(OA_ST * 100, rep(NA, nclass_ST-1)), c(OA_CI_ST * 100, rep(NA, nclass_ST-1))), nrow = nclass_ST)
+result_ST <- round(result_ST, digits = 2) 
+rownames(result_ST) <- levels(as.factor(trainST$classID))
+colnames(result_ST) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
+class(result_ST) <- "table"
+result_ST
+
 
 
 
@@ -858,16 +911,50 @@ plot(Map1)
 plot(map)
 plot(mapST)
 
+# convert raster in data frame
+mapdf = as.data.frame(map$layer, xy = T)
+
+
+
 map <- ratify(map)
 rat <- levels(map)[[1]]
+# Create new columns for land cover classes
 rat$landcover <- c('Informal Type I','Informal Type II', 'Informal Type III',
                    'Formal', 'No-settlement', 'Roads and asphalt')
 rat$class <- c('1', '2', '3', '4', '5', '6')
+# set the map levels
+levels(map) <- rat
+# remove na values
+
+# Do the same for the second map
+mapST <- ratify(mapST)
 levels(mapST) <- rat
-levelplot(mapST, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'))
+
+
+Map2 <- 
+
+gplot(map) +
+  geom_tile(aes(fill = factor(value, labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                                                'Formal', 'No-settlement', 'Roads and asphalt')))) +
+  scale_fill_manual(values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'), name = 'Classes') +
+  coord_equal()  +
+  theme_minimal() +
+  labs(x="", 
+       y="") 
+
+
++
+  north(data=dn_circ,
+        location= "bottomright",
+        symbol = 10)
+
+
+
+
+
+levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e')) 
 
 levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'))
-
 
 
 #8c510a
