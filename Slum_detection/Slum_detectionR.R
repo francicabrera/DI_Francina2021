@@ -566,26 +566,83 @@ freq(mapST)
 # Write classification to disk
 writeRaster(mapST, filename="predicted_mapST", datatype="INT1S", overwrite=T)
 
-# Calculate class probabilities for each pixel.
-# Run predict() to store RF probabilities for class 1-6
-RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
-
-# Plot raster of class: informal settlement Type II
-plot(RF_modelC3_pST)
-freq(RF_modelC3_pST)
-
-# Area Adjusted Accuracies
+# # Calculate class probabilities for each pixel.
+# # Run predict() to store RF probabilities for class 1-6
+# RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
+# 
+# # Plot raster of class: informal settlement Type II
+# plot(RF_modelC3_pST)
+# freq(RF_modelC3_pST)
 
 
-
-
-
-
+# Area Adjusted Accuracy assessment
+# Calculated as in Olofsson et al. 2014
+# Code source: https://blogs.fu-berlin.de/reseda/area-adjusted-accuracies/
+# create regular accuracy matrix 
 
 
 
+# Extract image values at training point locations
+trainC3.spGLCM <- raster::extract(PC_glcm, trainC3, sp=T)
+
+# Convert to data.frame 
+trainC3.dfGLCM <- as.data.frame(trainC3.spGLCM)
 
 
+rrr <- raster::extract(mapST, testST,sp=T)
+confmat <- table(as.factor(extract(mapST, testST)), as.factor(testST$classID))
+
+
+
+
+
+# get number of pixels per class and convert in km²
+imgVal <- as.factor(getValues(mapST))
+nclass <- length(unique(trainST$classID))
+maparea <- sapply(1:nclass, function(x) sum(imgVal == x))
+maparea <- maparea * res(mapST)[1] ^ 2 / 1000000
+
+# set confidence interval
+conf <- 1.96
+
+# total  map area
+A <- sum(maparea)
+# proportion of area mapped as class i
+W_i <- maparea / A
+# number of reference points per class
+n_i <- rowSums(confmat) 
+# population error matrix (Eq.4)
+p <- W_i * confmat / n_i
+p[is.na(p)] <- 0
+
+# area estimation
+p_area <- colSums(p) * A
+# area estimation confidence interval (Eq.10)
+p_area_CI <- conf * A * sqrt(colSums((W_i * p - p ^ 2) / (n_i - 1)))
+
+# overall accuracy (Eq.1)
+OA <- sum(diag(p))
+# producers accuracy (Eq.2)
+PA <- diag(p) / colSums(p)
+# users accuracy (Eq.3)
+UA <- diag(p) / rowSums(p)
+
+# overall accuracy confidence interval (Eq.5)
+OA_CI <- conf * sqrt(sum(W_i ^ 2 * UA * (1 - UA) / (n_i - 1)))
+# user accuracy confidence interval (Eq.6)
+UA_CI <- conf * sqrt(UA * (1 - UA) / (n_i - 1)) 
+# producer accuracy confidence interval (Eq.7)
+N_j <- sapply(1:nclass, function(x) sum(maparea / n_i * confmat[ , x]) )
+tmp <- sapply(1:nclass, function(x) sum(maparea[-x] ^ 2 * confmat[-x, x] / n_i[-x] * ( 1 - confmat[-x, x] / n_i[-x]) / (n_i[-x] - 1)) )
+PA_CI <- conf * sqrt(1 / N_j ^ 2 * (maparea ^ 2 * ( 1 - PA ) ^ 2 * UA * (1 - UA) / (n_i - 1) + PA ^ 2 * tmp))
+
+# gather results
+result <- matrix(c(p_area, p_area_CI, PA * 100, PA_CI * 100, UA * 100, UA_CI * 100, c(OA * 100, rep(NA, nclass-1)), c(OA_CI * 100, rep(NA, nclass-1))), nrow = nclass)
+result <- round(result, digits = 2) 
+rownames(result) <- levels(as.factor(shp.train$classes))
+colnames(result) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
+class(result) <- "table"
+result
 
 
 
@@ -676,29 +733,6 @@ predictC3.df <- as.data.frame(predictC3.sr)
 
 
 
-
-# How accurate is our model?
-# The code for this section can be found in this source: https://andrewmaclachlan.github.io/CASA0005repo/advanced-r-maup-and-more-regression.html#cross-validation
-
-# We can run a correlation between the data we left out and the predicted data to assess the accuracy.
-actuals_preds <- data.frame(cbind(actuals=trainC3.df$classID,
-                                  predicteds=predictC3.df$layer))
-
-actuals_preds_correlation <- actuals_preds %>%
-  correlate() %>%
-  print()
-
-# We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
-# MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
-
-min_max_accuracy <- mean(apply(actuals_preds$, 1, min, na.rm=TRUE) /
-                           apply(actuals_preds$, 1, max, na.rm=TRUE))  
-min_max_accuracy
-
-# Kappa statistics
-
-
-# Cross validation
 
 
 
@@ -815,53 +849,54 @@ Map1_loc <- ggplot() +
   labs(x="", y="") 
 
 # Combine the main map with the inset map.
-Map1_main +
-  annotation_custom(ggplotGrob(Map1_loc), 
+Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
                     ymin = -1, ymax=1, xmin=1, xmax=1)
+plot(Map1)
+
+# Map 2 - Classification maps
+# map and mapST
+plot(map)
+plot(mapST)
+
+map <- ratify(map)
+rat <- levels(map)[[1]]
+rat$landcover <- c('Informal Type I','Informal Type II', 'Informal Type III',
+                   'Formal', 'No-settlement', 'Roads and asphalt')
+rat$class <- c('1', '2', '3', '4', '5', '6')
+levels(mapST) <- rat
+levelplot(mapST, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'))
+
+levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'))
 
 
 
+#8c510a
+#d8b365
+#f6e8c3
+#c7eae5
+#5ab4ac
+#01665e
 
-
-  
-  Map2 <- ggplot() +
-  geom_bin2d(data = CasesHRTA1_pd,
-             aes(X, Y),
-             binwidth = c(0.005, 0.005)) + 
-  geom_sf(data = RoadsA1,
-          col="#636363",
-          size=0.07) +
-  theme_minimal() +
-  scale_fill_distiller(palette = "GnBu",
-                       direction = 1, 
-                       name= "Count of cases with High RTs")+
-  theme(legend.position="bottom")+
-  labs(x="",
-       y="")+
-  geom_sf(data = EmerUnitsA1_pd,
-          col="#8856a7",
-          size=1,)+ 
-  geom_text(data = EmerUnitsA1_pd,
-            aes(X, Y, label = Ficha),
-            colour = "#404040",
-            size=3,
-            vjust = -1)+
-  annotation_scale(bar_cols=c("#f0f0f0","#636363"))+
-  north(data=CasesHRTA1_pd,
-        location= "bottomright",
-        symbol = 3)
-
-
-  
-  
+Map2a <- ggplot() +
+  geom_raster(map, aes(x = x, y = y))
   
 
-  tm_layout(inner.margin=c(0.1,0.04,0.04,0.04),
-            legend.outside=TRUE,
-            legend.outside.position = "right",
-            legend.text.size = 0.5,
-            legend.height = 0.5)
 
+
+
+
+
+
+
+
+
+# Map 3 - Informal settlements
+
+slums <- map %>%
+  reclassify(., cbind(-Inf, 0.3, NA))
+
+slums %>%
+  plot(.,main = 'Possible Veg cover')
 
 
 
@@ -1225,4 +1260,64 @@ Map1_main +
   # # Check the dimension of the objects
   # dim(train)
   # dim(test)
+  
+  # 
+  # # How accurate is our model?
+  # # The code for this section can be found in this source: https://andrewmaclachlan.github.io/CASA0005repo/advanced-r-maup-and-more-regression.html#cross-validation
+  # 
+  # # We can run a correlation between the data we left out and the predicted data to assess the accuracy.
+  # actuals_preds <- data.frame(cbind(actuals=trainC3.df$classID,
+  #                                   predicteds=predictC3.df$layer))
+  # 
+  # actuals_preds_correlation <- actuals_preds %>%
+  #   correlate() %>%
+  #   print()
+  # 
+  # # We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
+  # # MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
+  # 
+  # min_max_accuracy <- mean(apply(actuals_preds$, 1, min, na.rm=TRUE) /
+  #                            apply(actuals_preds$, 1, max, na.rm=TRUE))  
+  # min_max_accuracy
+  # 
+  # # Kappa statistics
+  # 
+  # 
+  # # Cross validation
+  
+  Map2 <- ggplot() +
+    geom_bin2d(data = CasesHRTA1_pd,
+               aes(X, Y),
+               binwidth = c(0.005, 0.005)) + 
+    geom_sf(data = RoadsA1,
+            col="#636363",
+            size=0.07) +
+    theme_minimal() +
+    scale_fill_distiller(palette = "GnBu",
+                         direction = 1, 
+                         name= "Count of cases with High RTs")+
+    theme(legend.position="bottom")+
+    labs(x="",
+         y="")+
+    geom_sf(data = EmerUnitsA1_pd,
+            col="#8856a7",
+            size=1,)+ 
+    geom_text(data = EmerUnitsA1_pd,
+              aes(X, Y, label = Ficha),
+              colour = "#404040",
+              size=3,
+              vjust = -1)+
+    annotation_scale(bar_cols=c("#f0f0f0","#636363"))+
+    north(data=CasesHRTA1_pd,
+          location= "bottomright",
+          symbol = 3)
+  
+  
+  
+  tm_layout(inner.margin=c(0.1,0.04,0.04,0.04),
+            legend.outside=TRUE,
+            legend.outside.position = "right",
+            legend.text.size = 0.5,
+            legend.height = 0.5)
+  
   
