@@ -555,7 +555,6 @@ PA_ST
 OA_ST <- sum(diag(accmat)) / sum(accmat) * 100
 OA_ST
 
-
 # Perform a classification of the image stack using the predict() function. 
 # Run predict() to store RF predictions
 mapST <- predict(mosaic_C3ST, RF_modelC3ST)
@@ -575,6 +574,7 @@ RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6)
 plot(RF_modelC3_pST)
 freq(RF_modelC3_pST)
 
+# Area Adjusted Accuracies
 
 
 
