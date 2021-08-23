@@ -351,6 +351,22 @@ test_acc <- as.factor(test$classID)
 # Assess the accuracy from the confusion matrix
 confusionMatrix(predClass, test_acc)
 
+# Producer and user's accuracy
+# Code source: https://blogs.fu-berlin.de/reseda/accuracy-statistics-in-r/
+# Build a contingency table of the counts at each combination of factor levels.
+# Rename the vectors accordingly.
+accmat <- table("pred" = predClass, "ref" = test_acc)
+accmat
+# User's accuracy
+UA <- diag(accmat) / rowSums(accmat) * 100
+UA
+# Producer's accuracy
+PA <- diag(accmat) / colSums(accmat) * 100
+PA
+# Overall accuracy
+OA <- sum(diag(accmat)) / sum(accmat) * 100
+OA
+
 # Perform a classification of the image stack using the predict() function. 
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
@@ -513,7 +529,7 @@ RF_modelC3ST$err.rate[,1] # OOB estimate of  error rate
 varImpPlot(RF_modelC3ST, sort=TRUE, main='Variable importance')
 varImp(RF_modelC3ST, scale = FALSE)
 
-# Model Performance
+# Model Performance - Accuracy assessment
 # Extract the predictions from the model, using the test dataset
 predClassST <- predict(RF_modelC3ST, testST)
 predClassST
@@ -521,8 +537,24 @@ predClassST
 # Use as.factor() for conversion of the classID column in the test dataset
 test_accST <- as.factor(testST$classID) 
 
-# Assess the accuracy from the confusion matrix
+# Assess the overall accuracy and Kappa from the confusion matrix
 confusionMatrix(predClassST, test_accST)
+
+# Producer and user's accuracy
+# Build a contingency table of the counts at each combination of factor levels.
+# Rename the vectors accordingly.
+accmat_ST <- table("pred" = predClassST, "ref" = test_accST)
+accmat_ST
+# User's accuracy
+UA_ST <- diag(accmat) / rowSums(accmat) * 100
+UA_ST
+# Producer's accuracy
+PA_ST <- diag(accmat) / colSums(accmat) * 100
+PA_ST
+# Overall accuracy
+OA_ST <- sum(diag(accmat)) / sum(accmat) * 100
+OA_ST
+
 
 # Perform a classification of the image stack using the predict() function. 
 # Run predict() to store RF predictions
