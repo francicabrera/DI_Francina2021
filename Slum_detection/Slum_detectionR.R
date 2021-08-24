@@ -737,7 +737,7 @@ Map1_main <- ggplot() +
   #     ggLayer = TRUE) +
   geom_sf(data = c3_boundary,
           aes(fill = TOPONIMIA)) +
-  scale_fill_manual(values = c(alpha('#d8b365',0.4))) +
+  scale_fill_manual(name = 'Study Area', values = c(alpha('#d8b365',0.4))) +
   theme_minimal() +
   labs(x="", 
        y="") +
@@ -745,7 +745,7 @@ Map1_main <- ggplot() +
           fill = NA,
           lwd = 0.3,
           aes(color = TOPONIMIA)) +
-  scale_color_manual(values = c("#cc4c02","#cc4c02","#cc4c02")) +
+  scale_color_manual(name = 'Circumscriptions', values = c("#cc4c02","#cc4c02","#cc4c02")) +
   geom_text(data = DNc_coords,
              aes(X,Y,
                  label= Label),
