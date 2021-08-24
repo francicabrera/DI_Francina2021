@@ -729,12 +729,12 @@ c3_boundary <- c3_boundary %>%
 
 # Map of Study Area
 Map1_main <- ggplot() +
-  # ggRGB(raster_mosaic,
-  #       r = 3,
-  #       g = 2,
-  #       b = 1,
-  #     stretch = "lin",
-  #     ggLayer = TRUE) +
+  ggRGB(raster_mosaic,
+        r = 3,
+        g = 2,
+        b = 1,
+      stretch = "lin",
+      ggLayer = TRUE) +
   geom_sf(data = c3_boundary,
           aes(fill = TOPONIMIA)) +
   scale_fill_manual(name = 'Study Area', values = c(alpha('#d8b365',0.4))) +
@@ -751,30 +751,16 @@ Map1_main <- ggplot() +
                  label= Label),
              colour = "white",
             size = 5) +
-  theme(legend.position= c(1.25, 0.4)) +
+  theme(legend.position= c(1.25, 0.42)) +
   ggsn::scalebar(data = dn_circ,
                  dist = 2, 
                  dist_unit = "km",
                  transform = FALSE,
-                 height = 0.01) +
+                 height = 0.01,
+                 border.size = 0.5) +
   north(data=dn_circ,
         location= "bottomright",
         symbol = 10)
-
-
-
-fill = alpha('#d8b365',0.4),
-
-ggplot() +
-  geom_sf(data = poly, aes(fill = "A")) +
-  geom_sf(data = point, aes(colour = "B"), show.legend = "point") +
-  geom_sf(data = line, aes(colour = "C"), show.legend = "line") +
-  scale_fill_manual(values = c("A" = "yellow")) +
-  scale_colour_manual(values = c("B" = "pink", "C" = "purple")) +
-  theme_minimal()
-
-scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
-  scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
 
 # Inset map
 Map1_loc <- ggplot() +
@@ -798,11 +784,10 @@ Map1_loc <- ggplot() +
   labs(x="", y="") 
 
 
-
 # Combine the main map with the inset map.
 Map1 <- ggdraw() +
   draw_plot(Map1_main) +
-  draw_plot(Map1_loc, x = 0.714, y = 0.01, width = 0.3, height = 0.3)
+  draw_plot(Map1_loc, x = 0.714, y = 0.005, width = 0.3, height = 0.3)
 
 Map1
 
@@ -813,36 +798,13 @@ ggsave("Map1.png",
 
 
 
-
-
-Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
-                    ymin = -1, ymax=1, xmin=1, xmax=1)
-plot(Map1)
-
-
-
-tm_shape(raster_mosaicLIN) +
-  tm_rgba(
-    r = 1,
-    g = 2,
-    b = 3,
-    a = 4)
-    interpolate = FALSE, max.value = 1)
-
-
-raster_mosaicLIN <- raster::stretch(raster_mosaic, minq=0, maxq=1)
-
-
-
-
-
-
-
 # Map 2 - Training data
 
 # Get X and Y coordinates
 trainC3_plot <- trainC3 %>% 
   cbind(st_coordinates(.)) 
+
+plotRGB(mosaic_C3,axes=TRUE, stretch="lin")
 
 # Set the map's properties
 Map2 <- ggplot() +
@@ -850,7 +812,7 @@ Map2 <- ggplot() +
         r = 3,
         g = 2,
         b = 1,
-        stretch = "lin",
+        stretch = "lin"),
         ggLayer = TRUE) +
   # geom_point(data = trainC3_plot, aes(X, Y),
   #         colour = trainC3_plot$classID) +
@@ -1466,4 +1428,22 @@ slums %>%
                      metric = "Kappa")
   
   
+  fill = alpha('#d8b365',0.4),
+  
+  ggplot() +
+    geom_sf(data = poly, aes(fill = "A")) +
+    geom_sf(data = point, aes(colour = "B"), show.legend = "point") +
+    geom_sf(data = line, aes(colour = "C"), show.legend = "line") +
+    scale_fill_manual(values = c("A" = "yellow")) +
+    scale_colour_manual(values = c("B" = "pink", "C" = "purple")) +
+    theme_minimal()
+  
+  scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
+    scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
+  
+  
+  
+  Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
+                                        ymin = -1, ymax=1, xmin=1, xmax=1)
+  plot(Map1)
   
