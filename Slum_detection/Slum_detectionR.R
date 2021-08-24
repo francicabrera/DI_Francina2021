@@ -725,8 +725,7 @@ DNc_coords$Label <- dn_circ$TOPONIMIA
 c3_boundary <- c3_boundary %>% 
   cbind(st_coordinates(.)) # get X and Y coordinates
 
-
-
+# Set the map's properties
 # Map of Study Area
 Map1_main <- ggplot() +
   ggRGB(raster_mosaic,
@@ -800,11 +799,15 @@ ggsave("Map1.png",
 
 # Map 2 - Training data
 
-# Get X and Y coordinates
-trainC3_plot <- trainC3 %>% 
-  cbind(st_coordinates(.)) 
+# Load zoom polygon
+zoomMap2 <- st_read(here("data","geo","zoom_Map2.shp")) %>% 
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
 
-plotRGB(mosaic_C3,axes=TRUE, stretch="lin")
+# # Get X and Y coordinates
+# trainC3_plot <- trainC3 %>% 
+#   cbind(st_coordinates(.)) 
+
 
 # Set the map's properties
 Map2 <- ggplot() +
@@ -812,24 +815,113 @@ Map2 <- ggplot() +
         r = 3,
         g = 2,
         b = 1,
-        stretch = "lin"),
+        stretch = "lin",
         ggLayer = TRUE) +
-  # geom_point(data = trainC3_plot, aes(X, Y),
-  #         colour = trainC3_plot$classID) +
-  theme_minimal() +
+  geom_sf(data = trainC3,
+          size = 0.4,
+           aes(color = factor(classID))) +
+  scale_color_manual(name = 'Classes',
+                     values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                     labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                                'Formal', 'No-settlement', 'Roads and asphalt')) +
+  geom_sf(data = zoomMap2,
+         color = 'red') +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        legend.position= c(1.2, 0.62),
+        axis.ticks = element_line(colour = "grey70", size = 0.2),
+        panel.grid.major = element_line(colour = "grey70", size = 0.2),
+        panel.background = element_blank()) +
   labs(x="", 
        y="") +
-  theme(legend.position="bottom") +
-  scalebar(dn_circ, dist = 5, dist_unit = "km", location = "bottomright",
-           transform = TRUE) +
-  # annotation_scale(plot_unit = "km",
-  #                  aes(location = "br")) +
-  north(data=dn_circ,
-        location= "bottomright",
-        symbol = 10)
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomleft") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
 
-scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
-  scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
+Map2
+
+# Save the map
+ggsave("Map2.png",
+       plot = Map2,
+       dpi = 600)
+
+
+
+# Map 3 - Classification maps
+
+## convert raster in data frame
+mapVal <-  rasterToPoints(map)    # as.data.frame(map$layer, xy = T)
+mapdf <- data.frame(mapVal)
+colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
+
+
+# Set the map's properties
+# Map classification #1
+Map3_1 <- ggplot() +
+  geom_raster(data = mapdf,
+              aes(y=Latitude,
+                  x=Longitude,
+                  fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                     values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                     labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                                'Formal', 'No-settlement', 'Roads and asphalt')) +
+  theme(axis.ticks = element_line(colour = "grey70", size = 0.2),
+        panel.grid.major = element_line(colour = "grey70", size = 0.2),
+        panel.background = element_blank(),
+        legend.position = "none") +
+  labs(x="", 
+       y="") 
+
+
+## convert raster in data frame
+mapValST <-  rasterToPoints(mapST)    # as.data.frame(map$layer, xy = T)
+mapdfST <- data.frame(mapValST)
+colnames(mapdfST) <- c('Longitude', 'Latitude', 'classID')
+
+# Set the map's properties
+# Map classification #2
+Map3_2 <- ggplot() +
+  geom_raster(data = mapdfST,
+              aes(y=Latitude,
+                  x=Longitude,
+                  fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                               'Formal', 'No-settlement', 'Roads and asphalt')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_line(colour = "grey70", size = 0.2),
+        panel.grid.major = element_line(colour = "grey70", size = 0.2),
+        panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+  
+
+
+
 
 
 # Map  - Classification maps
@@ -843,7 +935,7 @@ mapdf <- data.frame(mapVal)
 colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
 
 ggplot(data=mapdf, aes(y=Latitude, x=Longitude)) +
-  geom_raster(aes(fill=classID))+
+  geom_raster(aes(fill=factor(classID)))+
   theme_minimal() +
   labs(x="", 
        y="")
