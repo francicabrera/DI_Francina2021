@@ -49,6 +49,7 @@ library(RStoolbox)
 library(ggsn)
 library(ggspatial)
 library(grid)
+library(RColorBrewer)
 library(cowplot) # to arrange inset maps
 library(glcm) # to create GLCM model
 library(imager) # to convert RGB raster in grayscale
@@ -728,35 +729,49 @@ c3_boundary <- c3_boundary %>%
 
 # Map of Study Area
 Map1_main <- ggplot() +
-  ggRGB(raster_mosaic,
-        r = 3,
-        g = 2,
-        b = 1,
-      stretch = "lin",
-      ggLayer = TRUE) +
-  geom_sf(data = c3_boundary, #aes(x =, y=y),
-          fill = alpha("#fed98e",0.4)) +
+  # ggRGB(raster_mosaic,
+  #       r = 3,
+  #       g = 2,
+  #       b = 1,
+  #     stretch = "lin",
+  #     ggLayer = TRUE) +
+  geom_sf(data = c3_boundary,
+          aes(fill = TOPONIMIA)) +
+  scale_fill_manual(values = c(alpha('#d8b365',0.4))) +
   theme_minimal() +
   labs(x="", 
        y="") +
   geom_sf(data = dn_circ,
           fill = NA,
           lwd = 0.3,
-          colour = "#cc4c02") +
-  scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff'))
+          aes(color = TOPONIMIA)) +
+  scale_color_manual(values = c("#cc4c02","#cc4c02","#cc4c02")) +
   geom_text(data = DNc_coords,
              aes(X,Y,
                  label= Label),
              colour = "white",
-            size = 4) +
-  theme(legend.position="bottom") +
-  scalebar(dn_circ, dist = 5, dist_unit = "km", location = "bottomright",
-           transform = TRUE) +
-  # annotation_scale(plot_unit = "km",
-  #                  aes(location = "br")) +
+            size = 5) +
+  theme(legend.position= c(1.25, 0.4)) +
+  ggsn::scalebar(data = dn_circ,
+                 dist = 2, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01) +
   north(data=dn_circ,
         location= "bottomright",
         symbol = 10)
+
+
+
+fill = alpha('#d8b365',0.4),
+
+ggplot() +
+  geom_sf(data = poly, aes(fill = "A")) +
+  geom_sf(data = point, aes(colour = "B"), show.legend = "point") +
+  geom_sf(data = line, aes(colour = "C"), show.legend = "line") +
+  scale_fill_manual(values = c("A" = "yellow")) +
+  scale_colour_manual(values = c("B" = "pink", "C" = "purple")) +
+  theme_minimal()
 
 scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
   scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
@@ -774,7 +789,7 @@ Map1_loc <- ggplot() +
             aes(X,Y,
                 label= Label),
             colour = "black",
-            size = 4,
+            size = 2.5,
             nudge_x = 1,
             vjust = -1.5) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -787,7 +802,7 @@ Map1_loc <- ggplot() +
 # Combine the main map with the inset map.
 Map1 <- ggdraw() +
   draw_plot(Map1_main) +
-  draw_plot(Map1_loc, x = 0.73, y = 0.01, width = 0.3, height = 0.3)
+  draw_plot(Map1_loc, x = 0.714, y = 0.01, width = 0.3, height = 0.3)
 
 Map1
 
@@ -938,8 +953,8 @@ Map2a <- ggplot() +
 
 
 
-
-
+# en theme, para quitar
+panel.grid.major = element_blank()
 
 
 
