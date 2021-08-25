@@ -857,14 +857,14 @@ ggsave("Map2.png",
 
 # Map 3 - Classification maps
 
-## convert raster in data frame
-mapVal <-  rasterToPoints(map)    # as.data.frame(map$layer, xy = T)
+# Map classification #1
+# convert raster in data frame
+mapVal <-  rasterToPoints(map)    
 mapdf <- data.frame(mapVal)
 colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
 
 
 # Set the map's properties
-# Map classification #1
 Map3_1 <- ggplot() +
   geom_raster(data = mapdf,
               aes(y=Latitude,
@@ -875,21 +875,21 @@ Map3_1 <- ggplot() +
                      values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
                      labels = c('Informal Type I','Informal Type II', 'Informal Type III',
                                 'Formal', 'No-settlement', 'Roads and asphalt')) +
-  theme(axis.ticks = element_line(colour = "grey70", size = 0.2),
-        panel.grid.major = element_line(colour = "grey70", size = 0.2),
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
         panel.background = element_blank(),
         legend.position = "none") +
   labs(x="", 
        y="") 
 
-
-## convert raster in data frame
-mapValST <-  rasterToPoints(mapST)    # as.data.frame(map$layer, xy = T)
+# Map classification #2
+# convert raster in data frame 
+mapValST <-  rasterToPoints(mapST)    
 mapdfST <- data.frame(mapValST)
 colnames(mapdfST) <- c('Longitude', 'Latitude', 'classID')
 
 # Set the map's properties
-# Map classification #2
 Map3_2 <- ggplot() +
   geom_raster(data = mapdfST,
               aes(y=Latitude,
@@ -903,8 +903,9 @@ Map3_2 <- ggplot() +
   theme(legend.title = element_text(size = 15),
         legend.text = element_text(size = 12),
         legend.key = element_rect(fill = NA),
-        axis.ticks = element_line(colour = "grey70", size = 0.2),
-        panel.grid.major = element_line(colour = "grey70", size = 0.2),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
         panel.background = element_blank()) +
   labs(x="", 
        y="") +
@@ -918,7 +919,241 @@ Map3_2 <- ggplot() +
   north(data=trainC3,
         location= "topright",
         symbol = 10) 
+
+# Combine the main map with the inset map.
+Map3 <- ggdraw() +
+  draw_plot(Map3_1, x = -0.27, y = 0) +
+  draw_plot(Map3_2, x = 0.21, y = - 0.009)
+
+Map3
+
+# Save the map
+ggsave("Map3.png",
+       plot=Map3,
+       dpi = 600)
+
+
+
+
+# Map 4 - Slum maps (by type)
+
+# Map slums #1
+# Subset dataframe 
+mapdf_slums <- filter(mapdf, classID == '1' | classID == '2' | classID == '3')
   
+# Set the map's properties
+Map4_1 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdf_slums,
+              aes(y=Latitude,
+                  x=Longitude,
+                  fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('#8c510a', '#d8b365', '#f6e8c3'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        legend.position = "none") +
+  labs(x="", 
+       y="") 
+
+# Map slums #2
+# Subset dataframe 
+mapdfST_slums <- filter(mapdfST, classID == '1' | classID == '2' | classID == '3')
+
+# Set the map's properties
+Map4_2 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdfST_slums,
+            aes(y=Latitude,
+                x=Longitude,
+                fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('#8c510a', '#d8b365', '#f6e8c3'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+
+# Combine the main map with the inset map.
+Map4 <- ggdraw() +
+  draw_plot(Map4_1, x = -0.27, y = 0) +
+  draw_plot(Map4_2, x = 0.21, y = - 0.009)
+
+Map4
+
+# Save the map
+ggsave("Map4.png",
+       plot=Map4,
+       dpi = 600)
+
+
+
+
+# Map 5 - Slums (single color)
+
+# Map slums #1
+# Set the map's properties
+Map5_1 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdf_slums,
+            aes(y=Latitude,
+                x=Longitude,
+                fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('red', 'red', 'red'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        legend.position = "none") +
+  labs(x="", 
+       y="") 
+
+# Map slums #2
+# Set the map's properties
+Map5_2 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdf_slums,
+            aes(y=Latitude,
+                x=Longitude,
+                fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('red', 'red', 'red'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+
+
+# Combine the main map with the inset map.
+Map5 <- ggdraw() +
+  draw_plot(Map5_1, x = -0.27, y = 0) +
+  draw_plot(Map5_2, x = 0.21, y = - 0.009)
+
+Map5
+
+# Save the map
+ggsave("Map5.png",
+       plot=Map5,
+       dpi = 600)
+
+
+
+# Graphic 1 - Scatterplots Predicted vs Observed
+
+# Join predicted and observe into one data frame
+comparisonsST <- merge(xx, testST, by="id")
+
+# Statistics of these bands
+# Mosaic C3
+mosaic_C3 %>%
+  as.data.frame(., na.rm=TRUE) %>%
+  sample_n(., 100) %>%
+  ggpairs(.,axisLabels="none")
+
+
+predClassST, test_accST
+
+xx <- as.data.frame(predClassST)
+
+# We can run a correlation between the data we left out and the predicted data to assess the accuracy.
+actuals_preds <- data.frame(cbind(actuals = testST$classID,
+                                  predicteds = xx$predClassST))
+
+actuals_preds_correlation <- actuals_preds %>%
+  correlate() %>%
+  print()
+
+
+
+
+plot(xx$predClassST, testST$classID)
+
+
+plot(computeddata$Temp, computeddata$NDBI)
+
+ggplot(actuals_preds, 
+       aes(x=actuals, y=predicteds)) +
+  geom_hex(bins=100, na.rm=TRUE) +
+  labs(fill = "Count per bin")+
+  geom_smooth(method='lm', se=FALSE, size=0.6)+
+  theme_bw()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -951,13 +1186,6 @@ rat$class <- c('1', '2', '3', '4', '5', '6')
 # set the map levels
 levels(map) <- rat
 # remove na values
-
-
-
-
-
-
-
 
 
 
@@ -1391,9 +1619,9 @@ slums %>%
   # actuals_preds <- data.frame(cbind(actuals=trainC3.df$classID,
   #                                   predicteds=predictC3.df$layer))
   # 
-  # actuals_preds_correlation <- actuals_preds %>%
-  #   correlate() %>%
-  #   print()
+  actuals_preds_correlation <- actuals_preds %>%
+    correlate() %>%
+    print()
   # 
   # # We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
   # # MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
