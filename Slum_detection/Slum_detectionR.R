@@ -139,6 +139,7 @@ plot(raster49_mask)
 # Or, 0: no cloud, 1: cloud; 0: no shadow, 1: shadow.
 # See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
 freq(raster49_mask$cloud) 
+freq(raster49_mask)
 
 # Repeat the same process with the UDM raster from the second scene.
 # Create a temporary file that will be substituted with the downloaded raster.
@@ -458,7 +459,7 @@ result
 # Now, we will add texture features to see if it improves the slum detection. 
 # GLCM - Gray level co-occurrence matrix
 # This code follows the methodology of: https://ieeexplore.ieee.org/document/7447704
-# Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis,
+# Code Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis,
 # Calculate using default 90 degree shift textures_shift1 <- glcm(raster(L5TSR_1986, layer=1)) plot(textures_shift1)
 # Calculate over all directions
 # Red band
@@ -521,6 +522,7 @@ PC_glcm <- stack(PCA1, PCA2)
 # Plot
 plot(PC_glcm)
 
+
 # Stack with the original mosaic
 mosaic_C3ST <- stack(mosaic_C3, PC_glcm)
 
@@ -534,6 +536,18 @@ trainC3.dfGLCM <- as.data.frame(trainC3.spGLCM)
 
 # Merge spectral and glcm values
 trainC3.dfST <- merge(trainC3.df,trainC3.dfGLCM, by = "id")
+
+
+# Create boxplots of texture grouped by land cover class
+# Melt dataframe containing point id, classID, and 6 spectral bands
+spectra.dfST <- melt(trainC3.dfGLCM, id.vars='classID', 
+                   measure.vars=c('PC1', 'PC2'))
+
+# Create boxplots of spectral bands per class
+ggplot(spectra.dfST, aes(x=variable, y=value, color=classID)) +
+  geom_boxplot() +
+  theme_bw()
+
 
 # Rename column classID.x as classID
 names(trainC3.dfST)[2] <- 'classID'
@@ -703,6 +717,7 @@ result_ST
 
 ################################################################################
 # Plots
+
 # Map 1 - Location of Study Area
 
 # Labels
@@ -1096,6 +1111,9 @@ Map5
 ggsave("Map5.png",
        plot=Map5,
        dpi = 600)
+
+
+
 
 
 
@@ -1766,4 +1784,22 @@ slums %>%
   Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
                                         ymin = -1, ymax=1, xmin=1, xmax=1)
   plot(Map1)
+  
+  
+  
+  # Variance GLCM
+  mosaic_C3glcm
+  trainC3.spGLCtestM <- raster::extract(mosaic_C3glcm, trainC3, sp=T)
+  trainC3.dfGLCMtest <- as.data.frame(trainC3.spGLCtestM)
+  
+  # Create boxplots of texture grouped by land cover class
+  # Melt dataframe containing point id, classID, and 6 spectral bands
+  spectra.dfST <- melt(trainC3.dfGLCMtest, id.vars='classID', 
+                       measure.vars=c('glcm_variance.1', 'glcm_variance.2', 'glcm_variance.3', 'glcm_variance.4' ))
+  
+  # Create boxplots of spectral bands per class
+  ggplot(spectra.dfST, aes(x=variable, y=value, color=classID)) +
+    geom_boxplot() +
+    theme_bw()
+  
   
