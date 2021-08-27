@@ -1,25 +1,27 @@
 #########################
-# Extracting slums from satellite imagery. R
-# Francina Cabrera, 2021
+# Extracting urban informal settlements in Santo Domingo using machine learning.
+# A pixel-based aproach to classify informal Settlements in the Dominican Republic's capital using PlanetScope data.
+# Francina Cabrera Fermin
+# CASA UCL 2021
 
-# Description:
+# This 
+
 
 # Data:
+# Two PlanetScope Analytic Ortho scenes with 3 meters pixel resolution, along with their Unusable Data Masks (UDM). Taken on the 23/02/2021 23:20:17. Downloaded from https://www.Planet.com
+# Visually collected labelled training and assessment sample. Download with this link: Slum_detection/data/training_data/TrainingData_C3.shp
+# Distrito Nacional’s boundary (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic.
+# Distrito Nacional’s circumscription 3 (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic.
+# Dominican Republic’s provinces (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic. Downloaded from: https://www.one.gob.do/informaciones-cartograficas/shapefiles
 
+# The code and data can be found here: 
+# https://github.com/francicabrera/DI_Francina2021.git
 
-
-# Code source: 
-# https://pages.cms.hu-berlin.de/EOL/gcg_eo/index.html
-# https://andrewmaclachlan.github.io/CASA0005repo/advanced-raster-analysis.html
-# http://www.qgistutorials.com/en/docs/3/raster_mosaicing_and_clipping.html
 
 ################################################################################
 
+# Instructions 
 # Load all the required packages
-# install.packages(' ')
-
-install.packages("remotes")
-remotes::install_github("wilsontom/modelmisc")
 
 library(sp)
 library(raster)
@@ -28,7 +30,7 @@ library(sf)
 library(here)
 library(rgeos)
 library(rasterVis)
-library(ggplot2)
+library(ggplot2) # to make maps and graphics
 library(stringr)
 library(fs)
 library(tidyverse)
@@ -37,10 +39,10 @@ library(tmap)
 library(GGally)
 library(hexbin)
 library(reshape2)
-library(randomForest)
+library(randomForest) # to build the classification model
 library(caTools)
-library(googledrive)
-library(e1071)
+library(googledrive) # to load data from google drive 
+library(e1071) # to optimise the mtry parameter
 library(diffeR)
 library(caret)
 library(corrr)
@@ -48,15 +50,12 @@ library(grid)
 library(RStoolbox)
 library(ggsn)
 library(ggspatial)
-library(grid)
+library(grid) # to arrange several graphics/maps in a single plot
 library(RColorBrewer)
 library(cowplot) # to arrange inset maps
 library(glcm) # to create GLCM model
 library(imager) # to convert RGB raster in grayscale
-library(wilsontom/modelmisc) # for kappa accuracy
-# To install this package, run this code:
-# install.packages("remotes")
-# remotes::install_github("wilsontom/modelmisc")
+
 
 ################################################################################
 # 1. Load and prepare the data
@@ -114,8 +113,8 @@ raster50 <- stack(temp50)
 crs(raster50) 
 
 # Quick look at the images by the different bands
-plot(raster49, main="PlanetScope Distrito Nacional 20210223_123349_104e_3B_AnalyticMS_SR")
-plot(raster50, main="PlanetScope Distrito Nacional 20210223_123350_104e_3B_AnalyticMS_SR")
+plot(raster49, main="PlanetScope Distrito Nacional Scene 1")
+plot(raster50, main="PlanetScope Distrito Nacional Scene 2")
 
 # Cloud Assessment 
 # PlanetScope provides Usable Data Masks (UDM) to assess the data quality of their images
@@ -157,7 +156,7 @@ plot(raster50_mask)
 # Find the most frequent values using freq().
 freq(raster50_mask$cloud) 
 
-# As both raster show no signal of clouds, the mask wont be used. 
+# As both raster show no signal of clouds, the masks wont be used. 
 # Therefore, we will remain with the original scenes.
 
 # Merge the two original scenes to create a mosaic using the function mosaic()
@@ -232,16 +231,14 @@ mosaic_C3 %>%
 # The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
 # Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225,
 # the classification follows six classes:
-# 1 - Informal settlements Type I: defined roads
-# 2 - Informal settlements Type II: undefined roads
-# 3 - Informal settlements Type II: undefined roads and located in hazardous areas
-# 4 - Formal settlements (all built up areas)
-# 5 - Non-settlemets (vegetation, bare ground, water, grassland, parking lots, sport courts)
-# 6 - Roads
+# 1 - Informal settlements Type I. Settlements with irregular shape where roads could be visually identified. High reflectance.
+# 2 - Informal settlements Type I. High density of buildings and undefined roads.
+# 3 - Informal settlements Type III. High reflectance.
+# 4 - Formal settlement. High reflectance.
+# 5 - Non-settlemen. Bare ground, grassland, forest, water, parking lots and sports courts.
+# 6 - Roads and asphalt. low reflectance
 
-# Read training points, the following code assumes that it contains only the class attribute
-# in readOGR, dsn specifies the path to the folder containing the file (may not end with /), 
-# layer specifies the name of the shapefile without extension (.shp)
+# Read training points.
 trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>% 
   # Project to EPSG:32619.
   st_transform(.,32619)
@@ -269,9 +266,8 @@ ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
 
 
 # Machine learning model: Random Forest
+# This part creates a classification model using the spectral bands of the mosaic
 # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
-# Training data (dataframe): trainC3.df
-# stack: mosaic_C3
 
 # the randomForest() function expects the dependent variable to be of type factor.
 # Use as.factor() for conversion of the classID column.
@@ -305,9 +301,8 @@ test %>% group_by(classID) %>% count()
 dim(train)
 dim(test)
 
-
 # Model
-# Random Forest. Automated hyperparameter optimisation.
+# Automated hyperparameter optimisation.
 # This part of the process uses the package: "e1071". We will optimise the mtry parameter.
 # Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommended
 # to set it to a large number and compare across multiple runs of the model.
@@ -326,7 +321,6 @@ RF_modelC3.tune <- tune.randomForest(classID~.,
                                      mtry=c(2:10), 
                                      importance = TRUE,
                                      tunecontrol = cv)
-#OOB estimate of  error rate: 53.46
 
 # Store the best model in a new object for further use
 RF_modelC3 <- RF_modelC3.tune$best.model
@@ -343,43 +337,10 @@ RF_modelC3$err.rate[,1] # OOB estimate of  error rate
 varImpPlot(RF_modelC3, sort=TRUE, main='Variable importance')
 varImp(RF_modelC3, scale = FALSE)
 
-# Model Performance
-# Extract the predictions from the model, using the test dataset
-predClass <- predict(RF_modelC3, test)
-predClass
-
-# Use as.factor() for conversion of the classID column in the test dataset
-test_acc <- as.factor(test$classID) 
-
-# Assess the accuracy from the confusion matrix
-confusionMatrix(predClass, test_acc)
-
-# Producer and user's accuracy
-# Code source: https://blogs.fu-berlin.de/reseda/accuracy-statistics-in-r/
-# Build a contingency table of the counts at each combination of factor levels.
-# Rename the vectors accordingly.
-accmat <- table("pred" = predClass, "ref" = test_acc)
-accmat
-# User's accuracy
-UA <- diag(accmat) / rowSums(accmat) * 100
-UA
-# Producer's accuracy
-PA <- diag(accmat) / colSums(accmat) * 100
-PA
-# Overall accuracy
-OA <- sum(diag(accmat)) / sum(accmat) * 100
-OA
-
 # Perform a classification of the image stack using the predict() function. 
 # Run predict() to store RF predictions
 map <- predict(mosaic_C3, RF_modelC3)
 
-mapttest <- map
-mapttest[mapttest == 0] <- NA
-trim(mapttest)
-crop(mapttest, c3_boundary)
-
-freq(mapttest)
 # Plot raster
 plot(map)
 freq(map)
@@ -387,19 +348,23 @@ freq(map)
 # Write classification to disk
 writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
 
-# # Calculate class probabilities for each pixel.
-# # Run predict() to store RF probabilities for class 1-6
-# RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
-# 
-# # Plot raster of class: informal settlement Type II
-# plot(RF_modelC3_p)
-# freq(RF_modelC3_p)
 
+# Model Performance
 # Area Adjusted Accuracy assessment
-# Calculated as in Olofsson et al. 2014
+# Calculated as in http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
 # Code source: https://blogs.fu-berlin.de/reseda/area-adjusted-accuracies/
-# We will use the previous accuracy matrix: 
-confmat <- accmat
+
+# Extract the predictions from the model, using the test dataset
+predClass <- predict(RF_modelC3, test)
+predClass
+
+# Use as.factor() for conversion of the classID column in the test dataset
+test_acc <- as.factor(test$classID) 
+
+# Build a contingency table of the counts at each combination of factor levels.
+# Rename the vectors accordingly.
+confmat <- table("pred" = predClass, "ref" = test_acc)
+
 # get number of pixels per class and convert in km²
 imgVal <- as.factor(getValues(map))
 # Remove NA values from the classified dataset 
@@ -460,7 +425,6 @@ result
 # GLCM - Gray level co-occurrence matrix
 # This code follows the methodology of: https://ieeexplore.ieee.org/document/7447704
 # Code Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis,
-# Calculate using default 90 degree shift textures_shift1 <- glcm(raster(L5TSR_1986, layer=1)) plot(textures_shift1)
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
@@ -608,32 +572,6 @@ RF_modelC3ST$err.rate[,1] # OOB estimate of  error rate
 varImpPlot(RF_modelC3ST, sort=TRUE, main='Variable importance')
 varImp(RF_modelC3ST, scale = FALSE)
 
-# Model Performance - Accuracy assessment
-# Extract the predictions from the model, using the test dataset
-predClassST <- predict(RF_modelC3ST, testST)
-predClassST
-
-# Use as.factor() for conversion of the classID column in the test dataset
-test_accST <- as.factor(testST$classID) 
-
-# Assess the overall accuracy and Kappa from the confusion matrix
-confusionMatrix(predClassST, test_accST)
-
-# Producer and user's accuracy
-# Build a contingency table of the counts at each combination of factor levels.
-# Rename the vectors accordingly.
-accmat_ST <- table("pred" = predClassST, "ref" = test_accST)
-accmat_ST
-# User's accuracy
-UA_ST <- diag(accmat_ST) / rowSums(accmat_ST) * 100
-UA_ST
-# Producer's accuracy
-PA_ST <- diag(accmat_ST) / colSums(accmat_ST) * 100
-PA_ST
-# Overall accuracy
-OA_ST <- sum(diag(accmat_ST)) / sum(accmat_ST) * 100
-OA_ST
-
 # Perform a classification of the image stack using the predict() function. 
 # Run predict() to store RF predictions
 mapST <- predict(mosaic_C3ST, RF_modelC3ST)
@@ -645,18 +583,20 @@ freq(mapST)
 # Write classification to disk
 writeRaster(mapST, filename="predicted_mapST", datatype="INT1S", overwrite=T)
 
-# # Calculate class probabilities for each pixel.
-# # Run predict() to store RF probabilities for class 1-6
-# RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
-# 
-# # Plot raster of class: informal settlement Type II
-# plot(RF_modelC3_pST)
-# freq(RF_modelC3_pST)
-
-
+# Model Performance 
 # Area Adjusted Accuracy assessment
-# We will use the previous accuracy matrix: 
-confmat_ST <- accmat_ST
+# Extract the predictions from the model, using the test dataset
+predClassST <- predict(RF_modelC3ST, testST)
+predClassST
+
+# Use as.factor() for conversion of the classID column in the test dataset
+test_accST <- as.factor(testST$classID) 
+
+# Producer and user's accuracy
+# Build a contingency table of the counts at each combination of factor levels.
+# Rename the vectors accordingly.
+accmat_ST <- table("pred" = predClassST, "ref" = test_accST)
+
 # get number of pixels per class and convert in km²
 imgVal_ST <- as.factor(getValues(mapST))
 # Remove NA values from the classified dataset 
@@ -669,8 +609,6 @@ maparea_ST <- sapply(1:nclass_ST, function(x) sum(imgVal_ST == x))
 maparea_ST <- maparea_ST * res(mapST)[1] ^ 2 / 1000000
 
 # Set confidence interval
-# 1.96 for a 95% confidence interval, or 1.645 for a 90% confidence interval.
-# See more here: http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
 conf_ST <- 1.96
 
 # total  map area
@@ -713,6 +651,13 @@ class(result_ST) <- "table"
 result_ST
 
 
+
+
+
+# Code source: 
+# https://pages.cms.hu-berlin.de/EOL/gcg_eo/index.html
+# https://andrewmaclachlan.github.io/CASA0005repo/advanced-raster-analysis.html
+# http://www.qgistutorials.com/en/docs/3/raster_mosaicing_and_clipping.html
 
 
 ################################################################################
@@ -1111,6 +1056,32 @@ Map5
 ggsave("Map5.png",
        plot=Map5,
        dpi = 600)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1550,48 +1521,48 @@ slums %>%
 #     theme_bw()
   
   
-  # Include only useful predictors in the model.
-  trainC3_df <- select(trainC3.df, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
-                                      "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
-  
-  
-  RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=1000, mtry=c(2:10), tunecontrol = cv)
-  #OOB estimate of  error rate: 54.11
-  RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=1250, mtry=c(2:10), tunecontrol = cv)
-  #OOB estimate of  error rate: 54.21
-  RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=1500, mtry=c(2:10), tunecontrol = cv)
-  #OOB estimate of  error rate: 54.42
-  RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=1750, mtry=c(2:10), tunecontrol = cv)
-  #OOB estimate of  error rate: 53.65
+#   # Include only useful predictors in the model.
+#   trainC3_df <- select(trainC3.df, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
+#                                       "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
 #   
-  ########
-  
-  # NDVI
-  # Let’s make a function called NDVIfun
-  NDVIfun <- function(NIR, Red) {
-    NDVI <- (NIR - Red) / (NIR + Red)
-    return(NDVI)
-  }
-  
-  # Call the function
-  source('NDVIfun')
-  
-  # Calculate NDVI
-  ndvi <- NDVIfun(mosaic_C3$NIR, mosaic_C3$red)
-  
-  # plot
-  ndvi %>%
-    plot(.,col = rev(terrain.colors(10)), main = "NDVI")
-  
-  # Let's look at the histogram for this dataset
-  ndvi %>%
-    hist(., breaks = 40, main = "NDVI Histogram", xlim = c(-.3,.8))
-  
-  veg <- ndvi %>%
-    reclassify(., cbind(-Inf, 0.3, NA))
-  
-  veg %>%
-    plot(.,main = 'Possible Veg cover')
+#   
+#   RF_modelC3.tune1000 <- tune.randomForest(classID~., data = train, ntree=1000, mtry=c(2:10), tunecontrol = cv)
+#   #OOB estimate of  error rate: 54.11
+#   RF_modelC3.tune1250 <- tune.randomForest(classID~., data = train, ntree=1250, mtry=c(2:10), tunecontrol = cv)
+#   #OOB estimate of  error rate: 54.21
+#   RF_modelC3.tune1500 <- tune.randomForest(classID~., data = train, ntree=1500, mtry=c(2:10), tunecontrol = cv)
+#   #OOB estimate of  error rate: 54.42
+#   RF_modelC3.tune1750 <- tune.randomForest(classID~., data = train, ntree=1750, mtry=c(2:10), tunecontrol = cv)
+#   #OOB estimate of  error rate: 53.65
+# #   
+#   ########
+#   
+#   # NDVI
+#   # Let’s make a function called NDVIfun
+#   NDVIfun <- function(NIR, Red) {
+#     NDVI <- (NIR - Red) / (NIR + Red)
+#     return(NDVI)
+#   }
+#   
+#   # Call the function
+#   source('NDVIfun')
+#   
+#   # Calculate NDVI
+#   ndvi <- NDVIfun(mosaic_C3$NIR, mosaic_C3$red)
+#   
+#   # plot
+#   ndvi %>%
+#     plot(.,col = rev(terrain.colors(10)), main = "NDVI")
+#   
+#   # Let's look at the histogram for this dataset
+#   ndvi %>%
+#     hist(., breaks = 40, main = "NDVI Histogram", xlim = c(-.3,.8))
+#   
+#   veg <- ndvi %>%
+#     reclassify(., cbind(-Inf, 0.3, NA))
+#   
+#   veg %>%
+#     plot(.,main = 'Possible Veg cover')
   
   
   
@@ -1632,174 +1603,201 @@ slums %>%
   # 
   # # How accurate is our model?
   # # The code for this section can be found in this source: https://andrewmaclachlan.github.io/CASA0005repo/advanced-r-maup-and-more-regression.html#cross-validation
+  # # 
+  # # # We can run a correlation between the data we left out and the predicted data to assess the accuracy.
+  # # actuals_preds <- data.frame(cbind(actuals=trainC3.df$classID,
+  # #                                   predicteds=predictC3.df$layer))
+  # # 
+  # actuals_preds_correlation <- actuals_preds %>%
+  #   correlate() %>%
+  #   print()
+  # # 
+  # # # We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
+  # # # MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
+  # # 
+  # # min_max_accuracy <- mean(apply(actuals_preds$, 1, min, na.rm=TRUE) /
+  # #                            apply(actuals_preds$, 1, max, na.rm=TRUE))  
+  # # min_max_accuracy
+  # # 
+  # # # Kappa statistics
+  # # 
+  # # 
+  # # # Cross validation
   # 
-  # # We can run a correlation between the data we left out and the predicted data to assess the accuracy.
-  # actuals_preds <- data.frame(cbind(actuals=trainC3.df$classID,
-  #                                   predicteds=predictC3.df$layer))
+  # Map2 <- ggplot() +
+  #   geom_bin2d(data = CasesHRTA1_pd,
+  #              aes(X, Y),
+  #              binwidth = c(0.005, 0.005)) + 
+  #   geom_sf(data = RoadsA1,
+  #           col="#636363",
+  #           size=0.07) +
+  #   theme_minimal() +
+  #   scale_fill_distiller(palette = "GnBu",
+  #                        direction = 1, 
+  #                        name= "Count of cases with High RTs")+
+  #   theme(legend.position="bottom")+
+  #   labs(x="",
+  #        y="")+
+  #   geom_sf(data = EmerUnitsA1_pd,
+  #           col="#8856a7",
+  #           size=1,)+ 
+  #   geom_text(data = EmerUnitsA1_pd,
+  #             aes(X, Y, label = Ficha),
+  #             colour = "#404040",
+  #             size=3,
+  #             vjust = -1)+
+  #   annotation_scale(bar_cols=c("#f0f0f0","#636363"))+
+  #   north(data=CasesHRTA1_pd,
+  #         location= "bottomright",
+  #         symbol = 3)
   # 
-  actuals_preds_correlation <- actuals_preds %>%
-    correlate() %>%
-    print()
-  # 
-  # # We can also use min-max accuracy to see how close the actual and predicted values are, using the equation:
-  # # MinMaxAccuracy = mean (min(actuals, pedicteds) / max(actuals, pedicteds))
-  # 
-  # min_max_accuracy <- mean(apply(actuals_preds$, 1, min, na.rm=TRUE) /
-  #                            apply(actuals_preds$, 1, max, na.rm=TRUE))  
-  # min_max_accuracy
-  # 
-  # # Kappa statistics
   # 
   # 
-  # # Cross validation
-  
-  Map2 <- ggplot() +
-    geom_bin2d(data = CasesHRTA1_pd,
-               aes(X, Y),
-               binwidth = c(0.005, 0.005)) + 
-    geom_sf(data = RoadsA1,
-            col="#636363",
-            size=0.07) +
-    theme_minimal() +
-    scale_fill_distiller(palette = "GnBu",
-                         direction = 1, 
-                         name= "Count of cases with High RTs")+
-    theme(legend.position="bottom")+
-    labs(x="",
-         y="")+
-    geom_sf(data = EmerUnitsA1_pd,
-            col="#8856a7",
-            size=1,)+ 
-    geom_text(data = EmerUnitsA1_pd,
-              aes(X, Y, label = Ficha),
-              colour = "#404040",
-              size=3,
-              vjust = -1)+
-    annotation_scale(bar_cols=c("#f0f0f0","#636363"))+
-    north(data=CasesHRTA1_pd,
-          location= "bottomright",
-          symbol = 3)
-  
-  
-  
-  tm_layout(inner.margin=c(0.1,0.04,0.04,0.04),
-            legend.outside=TRUE,
-            legend.outside.position = "right",
-            legend.text.size = 0.5,
-            legend.height = 0.5)
-  
-  ######
-  
-  # Red band
-  partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
-  partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
-  partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
-  
-  # 5. Accuracy assessment with test data
-  predicted_class_test <- predict(RF_modelC3, test)
-  predicted_class_test
-  test[,4]
-  confusionMatrix(predicted_class_test, test)
-  
-  # 6. Perform a classification of the image stack using the predict() function. 
-  # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
-  # Run predict() to store RF predictions
-  map <- predict(mosaic_C3, RF_modelC3)
-  
-  
-  # Plot raster
-  plot(map)
-  freq(map)
-  
-  # Write classification to disk
-  writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
-  
-  # 6. Calculate class probabilities for each pixel.
-  # Run predict() to store RF probabilities for class 1-6
-  RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
-  
-  # Plot raster of class: informal settlement Type II
-  plot(RF_modelC3_p$layer.2)
-  
-  freq(RF_modelC3_p)
-  
-  # Scale probabilities to integer values 0-100 and write to disk
-  writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
-  
-  
-  
-  
-  
-  
-  # Extract image values at training point locations
-  predictC3.sr <- raster::extract(map, trainC3, sp=T)
-  
-  # Convert to data.frame and convert classID into factor
-  predictC3.df <- as.data.frame(predictC3.sr)
-  
-  
-  # Create a stratified reference sample using sampleStratified()
-  
-  strat_smpl <- sampleStratified(map, size = 50, sp = TRUE, na.rm = TRUE)
-  
-  writeOGR()
-  
-  plot(strat_smpl)
-  
-  
+  # tm_layout(inner.margin=c(0.1,0.04,0.04,0.04),
+  #           legend.outside=TRUE,
+  #           legend.outside.position = "right",
+  #           legend.text.size = 0.5,
+  #           legend.height = 0.5)
   # 
+  # ######
+  # 
+  # # Red band
+  # partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '1',  plot = TRUE)
+  # partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '2',  plot = TRUE)
+  # partialPlot(RF_modelC3, pred.data=train, x.var = 'red', which.class = '3',  plot = TRUE)
+  # 
+  # # 5. Accuracy assessment with test data
+  # predicted_class_test <- predict(RF_modelC3, test)
+  # predicted_class_test
+  # test[,4]
+  # confusionMatrix(predicted_class_test, test)
+  # 
+  # # 6. Perform a classification of the image stack using the predict() function. 
+  # # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
+  # # Run predict() to store RF predictions
+  # map <- predict(mosaic_C3, RF_modelC3)
+  # 
+  # 
+  # # Plot raster
+  # plot(map)
+  # freq(map)
+  # 
+  # # Write classification to disk
+  # writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
+  # 
+  # # 6. Calculate class probabilities for each pixel.
+  # # Run predict() to store RF probabilities for class 1-6
+  # RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+  # 
+  # # Plot raster of class: informal settlement Type II
+  # plot(RF_modelC3_p$layer.2)
+  # 
+  # freq(RF_modelC3_p)
+  # 
+  # # Scale probabilities to integer values 0-100 and write to disk
+  # writeRaster(RF_modelC3_pb*100, filename = 'prob_map2', datatype="INT1S", overwrite=T)
+  # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # # Extract image values at training point locations
+  # predictC3.sr <- raster::extract(map, trainC3, sp=T)
+  # 
+  # # Convert to data.frame and convert classID into factor
+  # predictC3.df <- as.data.frame(predictC3.sr)
+  # 
+  # 
+  # # Create a stratified reference sample using sampleStratified()
+  # 
+  # strat_smpl <- sampleStratified(map, size = 50, sp = TRUE, na.rm = TRUE)
+  # 
+  # writeOGR()
+  # 
+  # plot(strat_smpl)
+  # 
+  # 
+  # # 
+  # 
+  # 
+  # 
+  # 
+  # 
+  # # Other Method
+  # # https://www.youtube.com/watch?v=ww8KWgT98Hw
+  # set.seed(42) # allows reproducibility to a process with a random component (random forest)
+  # # Set the train control parameters. Method: cross validation, 5 k-folds, verboseIter = True (to print everything)
+  # trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
+  # 
+  # rf.model2 <- train(classID~., data=train, method= "ranger",
+  #                    tuneLength = 10,
+  #                    preProcess = c("center", "scale"),
+  #                    trControl = trainctrl,
+  #                    metric = "Kappa")
+  # 
+  # 
+  # fill = alpha('#d8b365',0.4),
+  # 
+  # ggplot() +
+  #   geom_sf(data = poly, aes(fill = "A")) +
+  #   geom_sf(data = point, aes(colour = "B"), show.legend = "point") +
+  #   geom_sf(data = line, aes(colour = "C"), show.legend = "line") +
+  #   scale_fill_manual(values = c("A" = "yellow")) +
+  #   scale_colour_manual(values = c("B" = "pink", "C" = "purple")) +
+  #   theme_minimal()
+  # 
+  # scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
+  #   scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
+  # 
+  # 
+  # 
+  # Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
+  #                                       ymin = -1, ymax=1, xmin=1, xmax=1)
+  # plot(Map1)
+  # 
+  # 
+  # 
+  # # Variance GLCM
+  # mosaic_C3glcm
+  # trainC3.spGLCtestM <- raster::extract(mosaic_C3glcm, trainC3, sp=T)
+  # trainC3.dfGLCMtest <- as.data.frame(trainC3.spGLCtestM)
+  # 
+  # # Create boxplots of texture grouped by land cover class
+  # # Melt dataframe containing point id, classID, and 6 spectral bands
+  # spectra.dfST <- melt(trainC3.dfGLCMtest, id.vars='classID', 
+  #                      measure.vars=c('glcm_variance.1', 'glcm_variance.2', 'glcm_variance.3', 'glcm_variance.4' ))
+  # 
+  # # Create boxplots of spectral bands per class
+  # ggplot(spectra.dfST, aes(x=variable, y=value, color=classID)) +
+  #   geom_boxplot() +
+  #   theme_bw()
+  # # # Calculate class probabilities for each pixel.
+# # Run predict() to store RF probabilities for class 1-6
+# RF_modelC3_p <- predict(mosaic_C3, RF_modelC3, type = "prob", index=c(1:6))
+# 
+# # Plot raster of class: informal settlement Type II
+# plot(RF_modelC3_p)
+# freq(RF_modelC3_p)
+
+# Assess the accuracy from the confusion matrix
+confusionMatrix(predClass, test_acc)
+
+
+# # Calculate class probabilities for each pixel.
+# # Run predict() to store RF probabilities for class 1-6
+# RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
+# 
+# # Plot raster of class: informal settlement Type II
+# plot(RF_modelC3_pST)
+# freq(RF_modelC3_pST)
   
-  
-  
-  
-  
-  # Other Method
-  # https://www.youtube.com/watch?v=ww8KWgT98Hw
-  set.seed(42) # allows reproducibility to a process with a random component (random forest)
-  # Set the train control parameters. Method: cross validation, 5 k-folds, verboseIter = True (to print everything)
-  trainctrl <- trainControl(method = "cv", number = 5, verboseIter = TRUE)
-  
-  rf.model2 <- train(classID~., data=train, method= "ranger",
-                     tuneLength = 10,
-                     preProcess = c("center", "scale"),
-                     trControl = trainctrl,
-                     metric = "Kappa")
-  
-  
-  fill = alpha('#d8b365',0.4),
-  
-  ggplot() +
-    geom_sf(data = poly, aes(fill = "A")) +
-    geom_sf(data = point, aes(colour = "B"), show.legend = "point") +
-    geom_sf(data = line, aes(colour = "C"), show.legend = "line") +
-    scale_fill_manual(values = c("A" = "yellow")) +
-    scale_colour_manual(values = c("B" = "pink", "C" = "purple")) +
-    theme_minimal()
-  
-  scale_color_manual(values = c("Women" = '#ff00ff','Men' = '#3399ff')) + 
-    scale_shape_manual(values = c('Women' = 17, 'Men' = 16))
-  
-  
-  
-  Map1 <- Map1_main + annotation_custom(ggplotGrob(Map1_loc), 
-                                        ymin = -1, ymax=1, xmin=1, xmax=1)
-  plot(Map1)
-  
-  
-  
-  # Variance GLCM
-  mosaic_C3glcm
-  trainC3.spGLCtestM <- raster::extract(mosaic_C3glcm, trainC3, sp=T)
-  trainC3.dfGLCMtest <- as.data.frame(trainC3.spGLCtestM)
-  
-  # Create boxplots of texture grouped by land cover class
-  # Melt dataframe containing point id, classID, and 6 spectral bands
-  spectra.dfST <- melt(trainC3.dfGLCMtest, id.vars='classID', 
-                       measure.vars=c('glcm_variance.1', 'glcm_variance.2', 'glcm_variance.3', 'glcm_variance.4' ))
-  
-  # Create boxplots of spectral bands per class
-  ggplot(spectra.dfST, aes(x=variable, y=value, color=classID)) +
-    geom_boxplot() +
-    theme_bw()
-  
-  
+# User's accuracy
+UA_ST <- diag(accmat_ST) / rowSums(accmat_ST) * 100
+UA_ST
+# Producer's accuracy
+PA_ST <- diag(accmat_ST) / colSums(accmat_ST) * 100
+PA_ST
+# Overall accuracy
+OA_ST <- sum(diag(accmat_ST)) / sum(accmat_ST) * 100
+OA_ST
