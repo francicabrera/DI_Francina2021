@@ -1,6 +1,6 @@
 #########################
-# Extracting urban informal settlements in Santo Domingo using machine learning.
-# A pixel-based aproach to classify informal Settlements in the Dominican Republic's capital using PlanetScope data.
+# Extracting urban informal settlements using machine learning.
+# A pixel-based approach to classify informal Settlements in the Dominican Republic's capital using PlanetScope data.
 # Francina Cabrera Fermin
 # CASA UCL 2021
 
@@ -23,38 +23,23 @@
 # Instructions 
 # Load all the required packages
 
-library(sp)
-library(raster)
-library(rgdal)
-library(sf)
-library(here)
-library(rgeos)
-library(rasterVis)
-library(ggplot2) # to make maps and graphics
-library(stringr)
-library(fs)
-library(tidyverse)
-library(maptools)
-library(tmap)
-library(GGally)
-library(hexbin)
-library(reshape2)
-library(randomForest) # to build the classification model
-library(caTools)
+library(sf) # to read layers 
+library(tmap) # visualisation
 library(googledrive) # to load data from google drive 
+library(here) # file referencing 
+library(raster) # to work with rasters
+library(sp)
+library(GGally) # to combine maps in a single plot
+library(tidyverse) # data management
+library(ggplot2) # to make maps and graphics
+library(reshape2) # data management
+library(caret) # create data partition
 library(e1071) # to optimise the mtry parameter
-library(diffeR)
-library(caret)
-library(corrr)
-library(grid)
-library(RStoolbox)
-library(ggsn)
-library(ggspatial)
-library(grid) # to arrange several graphics/maps in a single plot
-library(RColorBrewer)
-library(cowplot) # to arrange inset maps
+library(randomForest) # to build the classification model
 library(glcm) # to create GLCM model
-library(imager) # to convert RGB raster in grayscale
+library(RStoolbox) # to perform PCA
+library(ggsn) # visualisation
+library(cowplot) # to arrange inset maps
 
 
 ################################################################################
@@ -595,7 +580,7 @@ test_accST <- as.factor(testST$classID)
 # Producer and user's accuracy
 # Build a contingency table of the counts at each combination of factor levels.
 # Rename the vectors accordingly.
-accmat_ST <- table("pred" = predClassST, "ref" = test_accST)
+confmat_ST <- table("pred" = predClassST, "ref" = test_accST)
 
 # get number of pixels per class and convert in km²
 imgVal_ST <- as.factor(getValues(mapST))
@@ -681,9 +666,8 @@ DNc_coords <- as.data.frame(sf::st_coordinates(DNc_points))
 DNc_coords$Label <- dn_circ$TOPONIMIA
 
 # Get XY coordinates
-
 c3_boundary <- c3_boundary %>% 
-  cbind(st_coordinates(.)) # get X and Y coordinates
+  cbind(st_coordinates(.)) 
 
 # Set the map's properties
 # Map of Study Area
@@ -1088,166 +1072,166 @@ ggsave("Map5.png",
 
 
 
-# Graphic 1 - Scatterplots Predicted vs Observed
-
-# Join predicted and observe into one data frame
-comparisonsST <- merge(xx, testST, by="id")
-
-# Statistics of these bands
-# Mosaic C3
-mosaic_C3 %>%
-  as.data.frame(., na.rm=TRUE) %>%
-  sample_n(., 100) %>%
-  ggpairs(.,axisLabels="none")
-
-
-predClassST, test_accST
-
-xx <- as.data.frame(predClassST)
-
-# We can run a correlation between the data we left out and the predicted data to assess the accuracy.
-actuals_preds <- data.frame(cbind(actuals = testST$classID,
-                                  predicteds = xx$predClassST))
-
-actuals_preds_correlation <- actuals_preds %>%
-  correlate() %>%
-  print()
-
-
-
-
-plot(xx$predClassST, testST$classID)
-
-
-plot(computeddata$Temp, computeddata$NDBI)
-
-ggplot(actuals_preds, 
-       aes(x=actuals, y=predicteds)) +
-  geom_hex(bins=100, na.rm=TRUE) +
-  labs(fill = "Count per bin")+
-  geom_smooth(method='lm', se=FALSE, size=0.6)+
-  theme_bw()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Map  - Classification maps
-# map and mapST
-plot(map)
-plot(mapST)
-
-# convert raster in data frame
-mapVal <-  rasterToPoints(map)    # as.data.frame(map$layer, xy = T)
-mapdf <- data.frame(mapVal)
-colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
-
-ggplot(data=mapdf, aes(y=Latitude, x=Longitude)) +
-  geom_raster(aes(fill=factor(classID)))+
-  theme_minimal() +
-  labs(x="", 
-       y="")
-
-
-
-map <- ratify(map)
-rat <- levels(map)[[1]]
-# Create new columns for land cover classes
-rat$landcover <- c('Informal Type I','Informal Type II', 'Informal Type III',
-                   'Formal', 'No-settlement', 'Roads and asphalt')
-rat$class <- c('1', '2', '3', '4', '5', '6')
-# set the map levels
-levels(map) <- rat
-# remove na values
-
-
-
-
-
-# Do the same for the second map
-mapST <- ratify(mapST)
-levels(mapST) <- rat
-
-
-Map <- 
-
-gplot(map) +
-  geom_tile(aes(fill = factor(value, labels = c('Informal Type I','Informal Type II', 'Informal Type III',
-                                                'Formal', 'No-settlement', 'Roads and asphalt')))) +
-  scale_fill_manual(values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'), name = 'Classes') +
-  coord_equal()  +
-  theme_minimal() +
-  labs(x="", 
-       y="") 
-
-
-+
-  north(data=dn_circ,
-        location= "bottomright",
-        symbol = 10)
-
-
-
-
-
-levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e')) 
-
-levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'))
-
-
-#8c510a
-#d8b365
-#f6e8c3
-#c7eae5
-#5ab4ac
-#01665e
-
-Map2a <- ggplot() +
-  geom_raster(map, aes(x = x, y = y))
-  
-
-
-
-# en theme, para quitar
-panel.grid.major = element_blank()
-
-
-
-
-
-# Map  - Informal settlements
-
-slums <- map %>%
-  reclassify(., cbind(-Inf, 0.3, NA))
-
-slums %>%
-  plot(.,main = 'Possible Veg cover')
-
-
-
-
-
-
-
-
-
-
+# # Graphic 1 - Scatterplots Predicted vs Observed
+# 
+# # Join predicted and observe into one data frame
+# comparisonsST <- merge(xx, testST, by="id")
+# 
+# # Statistics of these bands
+# # Mosaic C3
+# mosaic_C3 %>%
+#   as.data.frame(., na.rm=TRUE) %>%
+#   sample_n(., 100) %>%
+#   ggpairs(.,axisLabels="none")
+# 
+# 
+# predClassST, test_accST
+# 
+# xx <- as.data.frame(predClassST)
+# 
+# # We can run a correlation between the data we left out and the predicted data to assess the accuracy.
+# actuals_preds <- data.frame(cbind(actuals = testST$classID,
+#                                   predicteds = xx$predClassST))
+# 
+# actuals_preds_correlation <- actuals_preds %>%
+#   correlate() %>%
+#   print()
+# 
+# 
+# 
+# 
+# plot(xx$predClassST, testST$classID)
+# 
+# 
+# plot(computeddata$Temp, computeddata$NDBI)
+# 
+# ggplot(actuals_preds, 
+#        aes(x=actuals, y=predicteds)) +
+#   geom_hex(bins=100, na.rm=TRUE) +
+#   labs(fill = "Count per bin")+
+#   geom_smooth(method='lm', se=FALSE, size=0.6)+
+#   theme_bw()
+# 
+# 
+# 
+# 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 
+# 
+# 
+# # Map  - Classification maps
+# # map and mapST
+# plot(map)
+# plot(mapST)
+# 
+# # convert raster in data frame
+# mapVal <-  rasterToPoints(map)    # as.data.frame(map$layer, xy = T)
+# mapdf <- data.frame(mapVal)
+# colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
+# 
+# ggplot(data=mapdf, aes(y=Latitude, x=Longitude)) +
+#   geom_raster(aes(fill=factor(classID)))+
+#   theme_minimal() +
+#   labs(x="", 
+#        y="")
+# 
+# 
+# 
+# map <- ratify(map)
+# rat <- levels(map)[[1]]
+# # Create new columns for land cover classes
+# rat$landcover <- c('Informal Type I','Informal Type II', 'Informal Type III',
+#                    'Formal', 'No-settlement', 'Roads and asphalt')
+# rat$class <- c('1', '2', '3', '4', '5', '6')
+# # set the map levels
+# levels(map) <- rat
+# # remove na values
+
+
+
+# 
+# 
+# # Do the same for the second map
+# mapST <- ratify(mapST)
+# levels(mapST) <- rat
+# 
+# 
+# Map <- 
+# 
+# gplot(map) +
+#   geom_tile(aes(fill = factor(value, labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+#                                                 'Formal', 'No-settlement', 'Roads and asphalt')))) +
+#   scale_fill_manual(values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'), name = 'Classes') +
+#   coord_equal()  +
+#   theme_minimal() +
+#   labs(x="", 
+#        y="") 
+# 
+# 
+# +
+#   north(data=dn_circ,
+#         location= "bottomright",
+#         symbol = 10)
+# 
+# 
+# 
+# 
+# 
+# levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e')) 
+# 
+# levelplot(map, col.regions=c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'))
+# 
+# 
+# #8c510a
+# #d8b365
+# #f6e8c3
+# #c7eae5
+# #5ab4ac
+# #01665e
+# 
+# Map2a <- ggplot() +
+#   geom_raster(map, aes(x = x, y = y))
+#   
+# 
+# 
+# 
+# # en theme, para quitar
+# panel.grid.major = element_blank()
+# 
+# 
+# 
+# 
+# 
+# # Map  - Informal settlements
+# 
+# slums <- map %>%
+#   reclassify(., cbind(-Inf, 0.3, NA))
+# 
+# slums %>%
+#   plot(.,main = 'Possible Veg cover')
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
+# 
 
 
 
@@ -1778,26 +1762,39 @@ slums %>%
 # 
 # # Plot raster of class: informal settlement Type II
 # plot(RF_modelC3_p)
-# freq(RF_modelC3_p)
-
-# Assess the accuracy from the confusion matrix
-confusionMatrix(predClass, test_acc)
-
-
-# # Calculate class probabilities for each pixel.
-# # Run predict() to store RF probabilities for class 1-6
-# RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
+# # freq(RF_modelC3_p)
 # 
-# # Plot raster of class: informal settlement Type II
-# plot(RF_modelC3_pST)
-# freq(RF_modelC3_pST)
-  
-# User's accuracy
-UA_ST <- diag(accmat_ST) / rowSums(accmat_ST) * 100
-UA_ST
-# Producer's accuracy
-PA_ST <- diag(accmat_ST) / colSums(accmat_ST) * 100
-PA_ST
-# Overall accuracy
-OA_ST <- sum(diag(accmat_ST)) / sum(accmat_ST) * 100
-OA_ST
+# # Assess the accuracy from the confusion matrix
+# confusionMatrix(predClass, test_acc)
+# 
+# 
+# # # Calculate class probabilities for each pixel.
+# # # Run predict() to store RF probabilities for class 1-6
+# # RF_modelC3_pST <- predict(mosaic_C3ST, RF_modelC3ST, type = "prob", index=c(1:6))
+# # 
+# # # Plot raster of class: informal settlement Type II
+# # plot(RF_modelC3_pST)
+# # freq(RF_modelC3_pST)
+#   
+# # User's accuracy
+# UA_ST <- diag(accmat_ST) / rowSums(accmat_ST) * 100
+# UA_ST
+# # Producer's accuracy
+# PA_ST <- diag(accmat_ST) / colSums(accmat_ST) * 100
+# PA_ST
+# # Overall accuracy
+# OA_ST <- sum(diag(accmat_ST)) / sum(accmat_ST) * 100
+# OA_ST
+# 
+# 
+# library(rgdal)
+# library(rgeos)
+# library(rasterVis)
+# library(stringr)
+# library(fs)
+# library(maptools)
+# library(hexbin)
+# library(caTools)
+# library(diffeR)
+# library(ggspatial)
+# library(grid) # to arrange several graphics/maps in a single plot
