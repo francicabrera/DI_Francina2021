@@ -250,6 +250,40 @@ ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
   theme_bw()
 
 
+# Vegetation indices
+# Normalised Difference Vegetation Indices
+ndvi <- (mosaic_C3$NIR - mosaic_C3$red)/(mosaic_C3$NIR + mosaic_C3$red)
+plot(ndvi)
+
+# Extract ndvi values at training point locations
+trainC3.ndvi <- raster::extract(ndvi, trainC3, sp=T)
+
+# Convert to data.frame 
+trainC3.ndvi.df <- as.data.frame(trainC3.ndvi)
+
+# Rename column name to 'ndvi'
+names(trainC3.ndvi.df)[5] <- "ndvi"
+
+# Merge spectral and glcm values
+trainC3.df <- merge(trainC3.df,trainC3.ndvi.df, by = "id")
+
+# Include only useful predictors in the model.
+trainC3_df <- select(trainC3.df, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
+                                        "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
+
+# Rename column name to 'classID'
+names(trainC3.df)[1] <- "classID"
+
+trainC3_df <- trainC3.df
+
+# Use as.factor() for conversion of the classID column.
+trainC3_df$classID <- as.factor(trainC3_df$classID) 
+str(trainC3_df) #allows you to see the classes of the variables (all numeric)
+
+
+
+
+
 # Machine learning model: Random Forest
 # This part creates a classification model using the spectral bands of the mosaic
 # The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
@@ -404,7 +438,6 @@ rownames(result) <- levels(as.factor(train$classID))
 colnames(result) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
 class(result) <- "table"
 result
-
 
 # Now, we will add texture features to see if it improves the slum detection. 
 # GLCM - Gray level co-occurrence matrix
