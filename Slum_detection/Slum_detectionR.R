@@ -1798,3 +1798,16 @@ ggsave("Map5.png",
 # library(diffeR)
 # library(ggspatial)
 # library(grid) # to arrange several graphics/maps in a single plot
+
+
+# Convert the image to grayscale.
+mosaicc3_gray <- (mosaic_C3$blue + mosaic_C3$green + mosaic_C3$red + mosaic_C3$NIR)/4
+plot(mosaicc3_gray)
+
+
+
+testRed <- glcm(raster(mosaicc3_gray), 
+                window = c(25, 25), 
+                statistics = "variance",
+                shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                           c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
