@@ -446,34 +446,31 @@ result
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
-                         window = c(25, 25), 
+                         window = c(5, 5), 
                          statistics = "variance",
-                         shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                                    c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+                         shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesRed)
 
 # Green band
 texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
-                         window = c(25, 25), 
+                         window = c(5, 5), 
                          statistics = "variance",
-                         shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                                    c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+                         shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
+
 plot(texturesGreen)
 
 # Blue band
 texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
-                          window = c(25, 25), 
+                          window = c(5, 5), 
                           statistics = "variance",
-                          shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                                     c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesBlue)
 
 # NIR band
 texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
-                          window = c(25, 25), 
+                          window = c(5, 5), 
                           statistics = "variance",
-                          shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                                     c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesNIR)
 
 # Principal Component Analysis (PCA) of Texture Bands
@@ -1844,3 +1841,35 @@ testRed <- glcm(raster(mosaicc3_gray),
                 statistics = "variance",
                 shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
                            c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+
+texturesRed <- glcm(raster(mosaic_C3, layer=1), 
+                    window = c(25, 25), 
+                    statistics = "variance",
+                    shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                               c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesRed)
+
+# Green band
+texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
+                      window = c(25, 25), 
+                      statistics = "variance",
+                      shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                                 c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+c(0,1), c(1,1), c(1,0), c(1,-1)
+plot(texturesGreen)
+
+# Blue band
+texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
+                     window = c(25, 25), 
+                     statistics = "variance",
+                     shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                                c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesBlue)
+
+# NIR band
+texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
+                    window = c(25, 25), 
+                    statistics = "variance",
+                    shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+                               c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+plot(texturesNIR)
