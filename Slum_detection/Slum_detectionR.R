@@ -4,12 +4,12 @@
 # Francina Cabrera Fermin
 # CASA UCL 2021
 
-# This 
+# Description:................... 
 
 
 # Data:
-# Two PlanetScope Analytic Ortho scenes with 3 meters pixel resolution, along with their Unusable Data Masks (UDM). Taken on the 23/02/2021 23:20:17. Downloaded from https://www.Planet.com
-# Visually collected labelled training and assessment sample. Download with this link: Slum_detection/data/training_data/TrainingData_C3.shp
+# Two PlanetScope Analytic Ortho scenes with 3 metres pixel resolution, along with their Unusable Data Masks (UDM). Taken on the 23/02/2021 23:20:17. Downloaded from https://www.Planet.com
+# Visually collected labelled training and assessment sample. 
 # Distrito Nacional’s boundary (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic.
 # Distrito Nacional’s circumscription 3 (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic.
 # Dominican Republic’s provinces (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic. Downloaded from: https://www.one.gob.do/informaciones-cartograficas/shapefiles
@@ -21,7 +21,7 @@
 ################################################################################
 
 # Instructions 
-# Load all the required packages
+## Load all the required packages
 
 library(sf) # to read layers 
 library(tmap) # visualisation
@@ -194,15 +194,6 @@ rC3_rgb <- stack(mosaic_C3$red, mosaic_C3$green, mosaic_C3$blue) %>%
 rC3_false <- stack(mosaic_C3$NIR, mosaic_C3$red, mosaic_C3$green) %>% 
   plotRGB(.,axes=TRUE, stretch="lin")
 
-# Check the similarity between bands
-# set the plot window size (2 by 2)
-par(mfrow = c(2,2))
-# plot the bands - Mosaic C
-plot(mosaic_C3$blue, main = "Blue")
-plot(mosaic_C3$green, main = "Green")
-plot(mosaic_C3$red, main = "Red")
-plot(mosaic_C3$NIR, main = "NIR")
-
 # Statistics of these bands
 # Mosaic C3
 mosaic_C3 %>%
@@ -213,15 +204,15 @@ mosaic_C3 %>%
 
 # Training data 
 # The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
-# The location of the informal settlements in the Distrito Nacional was obtained from: http://adn.gob.do/joomlatools-files/docman-files/borrador_plan_est/Borrador%20Plan%20Estrategico%20del%20Distrito%20Nacional%202030%20%20%20V.%2028%20JUL%202020.pdf (page 75)
-# Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225,
+# The location of the informal settlements in the Distrito Nacional was obtained from: https://web.one.gob.do/publicaciones/2016/estudio-metodologia-para-la-identificacion-de-tugurios-en-el-distrito-nacional-censo-2010/
+# Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225 and https://doi.org/10.1016/j.compenvurbsys.2011.11.001.
 # the classification follows six classes:
-# 1 - Informal settlements Type I. Settlements with irregular shape where roads could be visually identified. High reflectance.
-# 2 - Informal settlements Type I. High density of buildings and undefined roads.
-# 3 - Informal settlements Type III. High reflectance.
-# 4 - Formal settlement. High reflectance.
-# 5 - Non-settlemen. Bare ground, grassland, forest, water, parking lots and sports courts.
-# 6 - Roads and asphalt. low reflectance
+# 1 - Informal settlements Type I. Slums with an irregular shape, high density of buildings, and where paved roads could be visually identified. Roofs: grey, brown, red, and white. Same building with varying colours.
+# 2 - Informal settlements Type I. Slums with an irregular shape, high density of buildings, and undefined roads. Roofs: grey, brown, red, and white. Same building with varying colours.
+# 3 - Informal settlements Type III. Slums with an irregular shape, high density of buildings, undefined roads, and proximity to hazardous elements (rivers or ravines). Roofs: grey, brown, red, and white. Same building with varying colours. Hazardous arrangement.
+# 4 - Formal settlement. Settlements with regular shape, regular density of buildings and paved roads.
+# 5 - Non-settlements. Bare ground, grassland, forest, water, parking lots and sports courts.
+# 6 - Roads and asphalt. Paved roads.
 
 # Read training points.
 trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>% 
@@ -230,7 +221,7 @@ trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>%
 # Quick look of the feature
 qtm(trainC3)
 crs(trainC3) # Check crs
-# Check how many data points are per class
+# Check how many data points per class are
 trainC3 %>% group_by(classID) %>% count()
 
 # Extract image values at training point locations
@@ -239,7 +230,8 @@ trainC3.sp <- raster::extract(mosaic_C3, trainC3, sp=T)
 # Convert to data.frame 
 trainC3.df <- as.data.frame(trainC3.sp)
 
-# Create boxplots of reflectance grouped by land cover class
+# Create boxplots of reflectance grouped by land cover class.
+# This will allow you to identify any outliers in the data.
 # Melt dataframe containing point id, classID, and 6 spectral bands
 spectra.df <- melt(trainC3.df, id.vars='classID', 
                    measure.vars=c('blue', 'green', 'red', 'NIR'))
@@ -249,46 +241,18 @@ ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
   geom_boxplot() +
   theme_bw()
 
-
-# Vegetation indices
-# Normalised Difference Vegetation Indices
-ndvi <- (mosaic_C3$NIR - mosaic_C3$red)/(mosaic_C3$NIR + mosaic_C3$red)
-plot(ndvi)
-
-# Extract ndvi values at training point locations
-trainC3.ndvi <- raster::extract(ndvi, trainC3, sp=T)
-
-# Convert to data.frame 
-trainC3.ndvi.df <- as.data.frame(trainC3.ndvi)
-
-# Rename column name to 'ndvi'
-names(trainC3.ndvi.df)[5] <- "ndvi"
-
-# Merge spectral and glcm values
-trainC3.df <- merge(trainC3.df,trainC3.ndvi.df, by = "id")
-
-# Include only useful predictors in the model.
-trainC3_df <- select(trainC3.df, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
-                                        "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
-
-# Rename column name to 'classID'
-names(trainC3.df)[1] <- "classID"
-
-trainC3_df <- trainC3.df
-
-# Use as.factor() for conversion of the classID column.
-trainC3_df$classID <- as.factor(trainC3_df$classID) 
-str(trainC3_df) #allows you to see the classes of the variables (all numeric)
+# # Include only useful predictors in the model.
+# trainC3_df <- select(trainC3.df, -c("id", "class_name","circ_num","coords.x1","coords.x2",
+#                                         "classID")) 
+# trainC3_df <- trainC3.df
 
 
 
+# Data classification: Random Forest
+# This section creates a classification model using the spectral bands of the mosaic
+# This section follows the code from this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
 
-
-# Machine learning model: Random Forest
-# This part creates a classification model using the spectral bands of the mosaic
-# The code for this section can be found in this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
-
-# the randomForest() function expects the dependent variable to be of type factor.
+# The randomForest() function expects the dependent variable to be of type factor.
 # Use as.factor() for conversion of the classID column.
 trainC3.df$classID <- as.factor(trainC3.df$classID) 
 str(trainC3.df) #allows you to see the classes of the variables (all numeric)
@@ -320,18 +284,16 @@ test %>% group_by(classID) %>% count()
 dim(train)
 dim(test)
 
-# Model
 # Automated hyperparameter optimisation.
 # This part of the process uses the package: "e1071". We will optimise the mtry parameter.
 # Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommended
 # to set it to a large number and compare across multiple runs of the model.
-# Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
 # Number of variables (mtry): set the number of k-folds that will run to find the optimal parameter.
 # Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
 # Other sources: https://www.youtube.com/watch?v=v5Bmz2eMd7M
 
-# Define accuracy from 10-fold cross-validation as optimization measure
-cv <- tune.control(cross = 10) 
+# Define accuracy from 5-fold cross-validation as optimization measure
+cv <- tune.control(cross = 5) 
 
 # Use tune.randomForest to assess the optimal combination of ntree and mtry
 RF_modelC3.tune <- tune.randomForest(classID~., 
@@ -412,8 +374,6 @@ p[is.na(p)] <- 0
 
 # area estimation
 p_area <- colSums(p) * A
-# area estimation confidence interval
-p_area_CI <- conf * A * sqrt(colSums((W_i * p - p ^ 2) / (n_i - 1)))
 
 # overall accuracy
 OA <- sum(diag(p))
@@ -422,17 +382,9 @@ PA <- diag(p) / colSums(p)
 # users accuracy
 UA <- diag(p) / rowSums(p)
 
-# overall accuracy confidence interval 
-OA_CI <- conf * sqrt(sum(W_i ^ 2 * UA * (1 - UA) / (n_i - 1)))
-# user accuracy confidence interval 
-UA_CI <- conf * sqrt(UA * (1 - UA) / (n_i - 1)) 
-# producer accuracy confidence interval 
-N_j <- sapply(1:nclass, function(x) sum(maparea / n_i * confmat[ , x]) )
-tmp <- sapply(1:nclass, function(x) sum(maparea[-x] ^ 2 * confmat[-x, x] / n_i[-x] * ( 1 - confmat[-x, x] / n_i[-x]) / (n_i[-x] - 1)) )
-PA_CI <- conf * sqrt(1 / N_j ^ 2 * (maparea ^ 2 * ( 1 - PA ) ^ 2 * UA * (1 - UA) / (n_i - 1) + PA ^ 2 * tmp))
 
 # gather results
-result <- matrix(c(p_area, p_area_CI, PA * 100, PA_CI * 100, UA * 100, UA_CI * 100, c(OA * 100, rep(NA, nclass-1)), c(OA_CI * 100, rep(NA, nclass-1))), nrow = nclass)
+result <- matrix(c(p_area, PA * 100, UA * 100, c(OA * 100, rep(NA, nclass-1))), nrow = nclass)
 result <- round(result, digits = 2) 
 rownames(result) <- levels(as.factor(train$classID))
 colnames(result) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
@@ -446,14 +398,14 @@ result
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
-                         window = c(5, 5), 
+                         window = c(21, 21), 
                          statistics = "variance",
                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesRed)
 
 # Green band
 texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
-                         window = c(5, 5), 
+                         window = c(21, 21), 
                          statistics = "variance",
                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 
@@ -461,22 +413,21 @@ plot(texturesGreen)
 
 # Blue band
 texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
-                          window = c(5, 5), 
+                          window = c(21, 21), 
                           statistics = "variance",
                           shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesBlue)
 
 # NIR band
 texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
-                          window = c(5, 5), 
+                          window = c(21, 21), 
                           statistics = "variance",
                           shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesNIR)
 
 # Principal Component Analysis (PCA) of Texture Bands
-# To reduce redundancy of texture bands and to determine the appropriate texture features,
-# we will apply PCA to all texture images.
-# The function rasterPCA() will calculate the PCA of our raster stack and will return a raster brick with multiple layers of PCA scores
+# To decrease redundancy of texture bands and to determine the appropriate texture features, we will apply PCA to all texture images.
+# The function rasterPCA() will calculate the PCA of our raster stack and will return a raster brick with multiple layers of PCA scores.
 # Source code: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis
 
 # Stack the glcm layers of all bands
@@ -559,9 +510,9 @@ testST %>% group_by(classID) %>% count()
 dim(trainST)
 dim(testST)
 
-# RF Model
-# Define accuracy from 10-fold cross-validation as optimization measure
-cvST <- tune.control(cross = 10) 
+# Random Forest Model
+# Define accuracy from 5-fold cross-validation as optimization measure
+cvST <- tune.control(cross = 20) 
 
 # Use tune.randomForest to assess the optimal combination of ntree and mtry
 RF_modelC3ST.tune <- tune.randomForest(classID~., 
@@ -623,9 +574,6 @@ maparea_ST <- sapply(1:nclass_ST, function(x) sum(imgVal_ST == x))
 # Transform area in km2
 maparea_ST <- maparea_ST * res(mapST)[1] ^ 2 / 1000000
 
-# Set confidence interval
-conf_ST <- 1.96
-
 # total  map area
 A_ST <- sum(maparea_ST)
 # proportion of area mapped as class i
@@ -638,9 +586,6 @@ p_ST[is.na(p_ST)] <- 0
 
 # area estimation
 p_area_ST <- colSums(p_ST) * A_ST
-# area estimation confidence interval 
-p_area_CI_ST <- conf_ST * A_ST * sqrt(colSums((W_i_ST * p_ST - p_ST ^ 2) / (n_i_ST - 1)))
-
 # overall accuracy 
 OA_ST <- sum(diag(p_ST))
 # producers accuracy 
@@ -648,20 +593,12 @@ PA_ST <- diag(p_ST) / colSums(p_ST)
 # users accuracy 
 UA_ST <- diag(p_ST) / rowSums(p_ST)
 
-# overall accuracy confidence interval 
-OA_CI_ST <- conf_ST * sqrt(sum(W_i_ST ^ 2 * UA_ST * (1 - UA_ST) / (n_i_ST - 1)))
-# user accuracy confidence interval 
-UA_CI_ST <- conf_ST * sqrt(UA_ST * (1 - UA_ST) / (n_i_ST - 1)) 
-# producer accuracy confidence interval 
-N_j_ST <- sapply(1:nclass_ST, function(x) sum(maparea_ST / n_i_ST * confmat_ST[ , x]) )
-tmp_ST <- sapply(1:nclass_ST, function(x) sum(maparea_ST[-x] ^ 2 * confmat_ST[-x, x] / n_i_ST[-x] * ( 1 - confmat_ST[-x, x] / n_i_ST[-x]) / (n_i_ST[-x] - 1)) )
-PA_CI_ST<- conf_ST * sqrt(1 / N_j_ST ^ 2 * (maparea_ST ^ 2 * ( 1 - PA_ST ) ^ 2 * UA_ST * (1 - UA_ST) / (n_i - 1) + PA_ST ^ 2 * tmp_ST))
 
 # gather results
-result_ST <- matrix(c(p_area_ST, p_area_CI_ST, PA_ST * 100, PA_CI_ST * 100, UA_ST * 100, UA_CI_ST * 100, c(OA_ST * 100, rep(NA, nclass_ST-1)), c(OA_CI_ST * 100, rep(NA, nclass_ST-1))), nrow = nclass_ST)
+result_ST <- matrix(c(p_area_ST, PA_ST * 100, UA_ST * 100, c(OA_ST * 100, rep(NA, nclass_ST-1))), nrow = nclass_ST)
 result_ST <- round(result_ST, digits = 2) 
 rownames(result_ST) <- levels(as.factor(trainST$classID))
-colnames(result_ST) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
+colnames(result_ST) <- c("km²", "PA", "UA", "OA")
 class(result_ST) <- "table"
 result_ST
 
@@ -902,7 +839,7 @@ Map3 <- ggdraw() +
 Map3
 
 # Save the map
-ggsave("Map3.png",
+ggsave("Map320kfolds.png",
        plot=Map3,
        dpi = 600)
 
@@ -987,7 +924,7 @@ Map4 <- ggdraw() +
 Map4
 
 # Save the map
-ggsave("Map4.png",
+ggsave("Map4b.png",
        plot=Map4,
        dpi = 600)
 
@@ -1873,3 +1810,38 @@ texturesNIR <- glcm(raster(mosaic_C3, layer=4),
                     shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
                                c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
 plot(texturesNIR)
+
+
+
+# # Check the similarity between bands
+# # set the plot window size (2 by 2)
+# par(mfrow = c(2,2))
+# # plot the bands - Mosaic C
+# plot(mosaic_C3$blue, main = "Blue")
+# plot(mosaic_C3$green, main = "Green")
+# plot(mosaic_C3$red, main = "Red")
+# plot(mosaic_C3$NIR, main = "NIR")
+##########################
+# # Vegetation indices
+# # Normalised Difference Vegetation Indices
+# ndvi <- (mosaic_C3$NIR - mosaic_C3$red)/(mosaic_C3$NIR + mosaic_C3$red)
+# plot(ndvi)
+# 
+# # Extract ndvi values at training point locations
+# trainC3.ndvi <- raster::extract(ndvi, trainC3, sp=T)
+# 
+# # Convert to data.frame 
+# trainC3.ndvi.df <- as.data.frame(trainC3.ndvi)
+# 
+# # Rename column name to 'ndvi'
+# names(trainC3.ndvi.df)[5] <- "ndvi"
+# 
+# # Merge spectral and glcm values
+# trainC3.df <- merge(trainC3.df,trainC3.ndvi.df, by = "id")
+
+######
+
+# # Rename column name to 'classID'
+# names(trainC3.df)[1] <- "classID"
+################
+# Accurary with Confidence Interval
