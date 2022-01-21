@@ -43,6 +43,7 @@ library(cowplot) # to arrange inset maps
 
 
 ################################################################################
+# DATA HANDLING
 # 1. Load and prepare the data
 # Dominican Republic Provinces (for visualisation only)
 provinces <- st_read(here("data","geo", "PROVCenso2010.shp")) %>% 
@@ -241,14 +242,9 @@ ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
   geom_boxplot() +
   theme_bw()
 
-# # Include only useful predictors in the model.
-# trainC3_df <- select(trainC3.df, -c("id", "class_name","circ_num","coords.x1","coords.x2",
-#                                         "classID")) 
-# trainC3_df <- trainC3.df
 
 
-
-# Data classification: Random Forest
+# DATA CLASSIFICATION: Random Forest
 # This section creates a classification model using the spectral bands of the mosaic
 # This section follows the code from this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
 
@@ -357,11 +353,6 @@ maparea <- sapply(1:nclass, function(x) sum(imgVal == x))
 # Transform area in km2
 maparea <- maparea * res(map)[1] ^ 2 / 1000000
 
-# Set confidence interval
-# 1.96 for a 95% confidence interval, or 1.645 for a 90% confidence interval.
-# See more here: http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
-conf <- 1.96
-
 # total  map area
 A <- sum(maparea)
 # proportion of area mapped as class i
@@ -382,12 +373,11 @@ PA <- diag(p) / colSums(p)
 # users accuracy
 UA <- diag(p) / rowSums(p)
 
-
 # gather results
 result <- matrix(c(p_area, PA * 100, UA * 100, c(OA * 100, rep(NA, nclass-1))), nrow = nclass)
 result <- round(result, digits = 2) 
 rownames(result) <- levels(as.factor(train$classID))
-colnames(result) <- c("km²", "km²±", "PA", "PA±", "UA", "UA±", "OA", "OA±")
+colnames(result) <- c("km²","PA", "UA", "OA")
 class(result) <- "table"
 result
 
@@ -395,17 +385,19 @@ result
 # GLCM - Gray level co-occurrence matrix
 # This code follows the methodology of: https://ieeexplore.ieee.org/document/7447704
 # Code Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis,
+# We'll calculate the GLCM for three window sizes: 5x5, 15x15, and 21x21
+
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
-                         window = c(21, 21), 
+                         window = c(5,5), 
                          statistics = "variance",
                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesRed)
 
 # Green band
 texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
-                         window = c(21, 21), 
+                         window = c(5,5), 
                          statistics = "variance",
                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 
@@ -413,14 +405,14 @@ plot(texturesGreen)
 
 # Blue band
 texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
-                          window = c(21, 21), 
+                          window = c(5,5), 
                           statistics = "variance",
                           shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesBlue)
 
 # NIR band
 texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
-                          window = c(21, 21), 
+                          window = c(5,5), 
                           statistics = "variance",
                           shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesNIR)
@@ -512,7 +504,7 @@ dim(testST)
 
 # Random Forest Model
 # Define accuracy from 5-fold cross-validation as optimization measure
-cvST <- tune.control(cross = 20) 
+cvST <- tune.control(cross = 5) 
 
 # Use tune.randomForest to assess the optimal combination of ntree and mtry
 RF_modelC3ST.tune <- tune.randomForest(classID~., 
@@ -521,7 +513,6 @@ RF_modelC3ST.tune <- tune.randomForest(classID~.,
                                      mtry=c(2:10), 
                                      importance = TRUE,
                                      tunecontrol = cvST)
-#OOB estimate of  error rate: 48.16%
 
 # Store the best model in a new object for further use
 RF_modelC3ST <- RF_modelC3ST.tune$best.model
@@ -839,7 +830,7 @@ Map3 <- ggdraw() +
 Map3
 
 # Save the map
-ggsave("Map320kfolds.png",
+ggsave("Map321x21.png",
        plot=Map3,
        dpi = 600)
 
@@ -1845,3 +1836,8 @@ plot(texturesNIR)
 # names(trainC3.df)[1] <- "classID"
 ################
 # Accurary with Confidence Interval
+
+# Set confidence interval
+# 1.96 for a 95% confidence interval, or 1.645 for a 90% confidence interval.
+# See more here: http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
+# <- 1.96
