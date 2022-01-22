@@ -390,14 +390,14 @@ result
 # Calculate over all directions
 # Red band
 texturesRed <- glcm(raster(mosaic_C3, layer=1), 
-                         window = c(5,5), 
+                         window = c(21,21), 
                          statistics = "variance",
                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesRed)
 
 # Green band
 texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
-                         window = c(5,5), 
+                         window = c(21,21), 
                          statistics = "variance",
                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 
@@ -405,14 +405,14 @@ plot(texturesGreen)
 
 # Blue band
 texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
-                          window = c(5,5), 
+                          window = c(21,21), 
                           statistics = "variance",
                           shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesBlue)
 
 # NIR band
 texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
-                          window = c(5,5), 
+                          window = c(21,21), 
                           statistics = "variance",
                           shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
 plot(texturesNIR)
@@ -443,7 +443,6 @@ PC_glcm <- stack(PCA1, PCA2)
 
 # Plot
 plot(PC_glcm)
-
 
 # Stack with the original mosaic
 mosaic_C3ST <- stack(mosaic_C3, PC_glcm)
@@ -939,7 +938,7 @@ Map5_1 <- ggplot() +
                 fill = factor(classID))) +
   coord_equal() +
   scale_fill_manual(name = 'Classes',
-                    values = c('red', 'red', 'red'),
+                    values = c('white', 'white', 'white'),
                     labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
   theme(axis.ticks = element_blank(),
         axis.text = element_blank(),
@@ -985,7 +984,7 @@ Map5_2 <- ggplot() +
   north(data=trainC3,
         location= "topright",
         symbol = 10) 
-
+Map5_2
 
 # Combine the main map with the inset map.
 Map5 <- ggdraw() +
@@ -1000,24 +999,109 @@ ggsave("Map5.png",
        dpi = 600)
 
 
+# Error rate plot
+# Create data frame 
+Errate <- c("52.32", "49.01", "48.84")
+Wsize <- c("5x5", "15x15", "21x21")
+df_errt <- data.frame(Wsize, df_errt )
+df_errt$Errate <- as.numeric(df_errt$Errate) 
+
+ggplot(df_errt, aes(x=reorder(Wsize, -Errate), y=Errate, group=1)) +
+  geom_line(stat="identity",color="#f6e8c3", size=2, alpha=0.9, linetype=2) +
+  theme_minimal() +
+  geom_point(color="#d8b365", size=2) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Error rate by window size", 
+       x="Window size", y = "Error rate")
+
+# Error rate by classes
+classesID <- c("IF-I", "IF-II", "IF-III", "FS", "NS", "RA")
+RFC1 <- c("0.97", "0.62", "0.70", "0.33", "0.59", "0.66")
+RFC5x5 <- c("0.98","0.60", "0.68", "0.32", "0.48", "0.64")
+RFC15x15 <- c("0.97", "0.56", "0.59", "0.30", "0.44", "0.61")
+RFC21x21 <- c("0.98", "0.58", "0.57", "0.28", "0.40", "0.64")
+df_errt2 <- data.frame(classesID, RFC1, RFC5x5, RFC15x15, RFC21x21 )
+
+ggplot(df_errt3, aes(x= classesID, group = 1)) +
+  geom_line(aes(y = "RFC1"), stat="identity",color="#8c510a", size=2, alpha=0.9, linetype=2) +
+  geom_line(aes(y = "RFC5x5"), stat="identity",color="#d8b365", size=2, alpha=0.9, linetype=2) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Error rate by window size", 
+       x="Error rate", y = "Window size")
+
+Modelsize <- c("RFC1", "RFC 5x5", "RFC 15x15", "RFC 21x21")
+IF_I <- c("0.97", "0.98", "0.97", "0.98")
+IF_II <- c("0.62", "0.60", "0.56", "0.58" )
+IF_III <- c("0.70", "0.68", "0.59", "0.57")
+FS <- c("0.33", "0.32", "0.30", "0.28")
+NS <- c("0.59", "0.48", "0.44", "0.40")
+RA <- c("0.66", "0.64", "0.61", "0.64")
+df_errt3 <- data.frame(Modelsize, IF_I, IF_II, IF_III, FS, NS, RA)
+
+
+values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+           'Formal', 'No-settlement', 'Roads and asphalt')) +
+
+ggplot(df_errt3, aes(x= Modelsize, group = 1)) +
+  geom_line(aes(y = "IF_I"), stat="identity",color="#8c510a", size=2, alpha=0.9, linetype=2) +
+  #geom_line(aes(y = "IF_II"), stat="identity",color="#d8b365", size=2, alpha=0.9, linetype=2) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  labs(title="Error rate by window size", 
+       x="Error rate", y = "Window size")
 
 
 
 
 
 
+# Variable importance
 
+# Model 1
+# Calculate variable importance with importance()
+RF1_imp <- importance(RF_modelC3, type = 1) # select type 1 for Mean decrease accuracy
+typeof(RF1_imp)
+# Convert to a a data table
+dt1 <- data.table::as.data.table(RF1_imp, keep.rownames = "var") %>% 
+  .[order(-MeanDecreaseAccuracy)]
+dt1
 
+# Plot the graph
 
+Graph3a <- ggplot(data=dt1, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
+  labs(title="RFC\n(spectral)", 
+       x="", y = "") +
+  geom_bar(stat="identity", fill='#f6e8c3', width=0.9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
 
+Graph3a
 
+# Model 2
+# Calculate variable importance with importance()
+RF2_imp <- importance(RF_modelC3ST, type = 1) # select type 1 for Mean decrease accuracy
+typeof(RF2_imp)
+# Convert to a a data table
+dt2 <- data.table::as.data.table(RF2_imp, keep.rownames = "var") %>% 
+  .[order(-MeanDecreaseAccuracy)] %>% 
+  .[var == "PC1", var := "GLCM Red"] %>% # Rename GLCM variables 
+  .[var == "PC2", var := "GLCM Green"]
+  
 
+# Plot the graph
 
+Graph3b <- ggplot(data=dt2, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
+  labs(title="RFC\n(spectral + texture)\n21 x 21", 
+       x="", y = "") +
+  geom_bar(stat="identity", fill='#f6e8c3', width=0.9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
 
-
-
-
-
+Graph3b 
 
 
 
