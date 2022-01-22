@@ -1007,29 +1007,15 @@ df_errt <- data.frame(Wsize, df_errt )
 df_errt$Errate <- as.numeric(df_errt$Errate) 
 
 ggplot(df_errt, aes(x=reorder(Wsize, -Errate), y=Errate, group=1)) +
-  geom_line(stat="identity",color="#f6e8c3", size=2, alpha=0.9, linetype=2) +
+  geom_line(stat="identity",color="#f5b85d", size=2, alpha=0.9, linetype=2) +
   theme_minimal() +
-  geom_point(color="#d8b365", size=2) +
+  geom_point(color="#f5a227", size=2) +
   theme(plot.title = element_text(hjust = 0.5)) +
   labs(title="Error rate by window size", 
        x="Window size", y = "Error rate")
 
+
 # Error rate by classes
-classesID <- c("IF-I", "IF-II", "IF-III", "FS", "NS", "RA")
-RFC1 <- c("0.97", "0.62", "0.70", "0.33", "0.59", "0.66")
-RFC5x5 <- c("0.98","0.60", "0.68", "0.32", "0.48", "0.64")
-RFC15x15 <- c("0.97", "0.56", "0.59", "0.30", "0.44", "0.61")
-RFC21x21 <- c("0.98", "0.58", "0.57", "0.28", "0.40", "0.64")
-df_errt2 <- data.frame(classesID, RFC1, RFC5x5, RFC15x15, RFC21x21 )
-
-ggplot(df_errt3, aes(x= classesID, group = 1)) +
-  geom_line(aes(y = "RFC1"), stat="identity",color="#8c510a", size=2, alpha=0.9, linetype=2) +
-  geom_line(aes(y = "RFC5x5"), stat="identity",color="#d8b365", size=2, alpha=0.9, linetype=2) +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  labs(title="Error rate by window size", 
-       x="Error rate", y = "Window size")
-
 Modelsize <- c("RFC1", "RFC 5x5", "RFC 15x15", "RFC 21x21")
 IF_I <- c("0.97", "0.98", "0.97", "0.98")
 IF_II <- c("0.62", "0.60", "0.56", "0.58" )
@@ -1037,23 +1023,28 @@ IF_III <- c("0.70", "0.68", "0.59", "0.57")
 FS <- c("0.33", "0.32", "0.30", "0.28")
 NS <- c("0.59", "0.48", "0.44", "0.40")
 RA <- c("0.66", "0.64", "0.61", "0.64")
-df_errt3 <- data.frame(Modelsize, IF_I, IF_II, IF_III, FS, NS, RA)
+df_errt2 <- data.frame(Modelsize, IF_I, IF_II, IF_III, FS, NS, RA)
+sapply(df_errt2, class) # check column's class
+# Change columns to numeric
+cols.num <- c("IF_I", "IF_II", "IF_III", "FS", "NS", "RA")
+df_errt2[cols.num] <- sapply(df_errt2[cols.num],as.numeric)
+sapply(df_errt2, class)
 
-
-values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
-labels = c('Informal Type I','Informal Type II', 'Informal Type III',
-           'Formal', 'No-settlement', 'Roads and asphalt')) +
-
-ggplot(df_errt3, aes(x= Modelsize, group = 1)) +
-  geom_line(aes(y = "IF_I"), stat="identity",color="#8c510a", size=2, alpha=0.9, linetype=2) +
-  #geom_line(aes(y = "IF_II"), stat="identity",color="#d8b365", size=2, alpha=0.9, linetype=2) +
+# Set colors for legends
+colors <- c("Informal Type I" = "#8c510a", "Informal Type II" = "#d8b365", "Informal Type III" = "#f6e8c3", "Formal" = "#c7eae5", "No-settlement" = "#5ab4ac", "Roads and asphalt" = "#01665e")
+# Create plot
+ggplot(df_errt2, aes(x= reorder(Modelsize, -IF_III), group=2)) +
+  geom_line(aes(y = IF_I, color="Informal Type I"), stat="identity", size=2, alpha=0.9, linetype=2) + 
+  geom_line(aes(y = IF_II, color="Informal Type II"), stat="identity", size=2, alpha=0.9, linetype=1) +
+  geom_line(aes(y = IF_II, color="Informal Type III"), stat="identity", size=2, alpha=0.9, linetype=2) +
+  geom_line(aes(y = FS, color="Formal"), stat="identity", size=1, alpha=0.9, linetype=2) +
+  geom_line(aes(y = NS, color="No-settlement"), stat="identity", size=1, alpha=0.9, linetype=2) +
+  geom_line(aes(y = RA, color="Roads and asphalt"), stat="identity", size=1, alpha=0.9, linetype=2) +
   theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5)) +
-  labs(title="Error rate by window size", 
-       x="Error rate", y = "Window size")
-
-
-
+  theme(plot.title = element_text(hjust = 0.5), legend.position="right") +
+  labs(title="Error rate by classes of interest", 
+       x="Window size", y = "Error rate") +
+  scale_color_manual(values = colors)
 
 
 
@@ -1102,6 +1093,32 @@ Graph3b <- ggplot(data=dt2, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanD
   coord_flip()
 
 Graph3b 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1842,49 +1859,49 @@ Graph3b
 # library(grid) # to arrange several graphics/maps in a single plot
 
 
-# Convert the image to grayscale.
-mosaicc3_gray <- (mosaic_C3$blue + mosaic_C3$green + mosaic_C3$red + mosaic_C3$NIR)/4
-plot(mosaicc3_gray)
-
-
-
-testRed <- glcm(raster(mosaicc3_gray), 
-                window = c(25, 25), 
-                statistics = "variance",
-                shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                           c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
-
-texturesRed <- glcm(raster(mosaic_C3, layer=1), 
-                    window = c(25, 25), 
-                    statistics = "variance",
-                    shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                               c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
-plot(texturesRed)
-
-# Green band
-texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
-                      window = c(25, 25), 
-                      statistics = "variance",
-                      shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                                 c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
-c(0,1), c(1,1), c(1,0), c(1,-1)
-plot(texturesGreen)
-
-# Blue band
-texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
-                     window = c(25, 25), 
-                     statistics = "variance",
-                     shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                                c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
-plot(texturesBlue)
-
-# NIR band
-texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
-                    window = c(25, 25), 
-                    statistics = "variance",
-                    shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
-                               c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
-plot(texturesNIR)
+# # Convert the image to grayscale.
+# mosaicc3_gray <- (mosaic_C3$blue + mosaic_C3$green + mosaic_C3$red + mosaic_C3$NIR)/4
+# plot(mosaicc3_gray)
+# 
+# 
+# 
+# testRed <- glcm(raster(mosaicc3_gray), 
+#                 window = c(25, 25), 
+#                 statistics = "variance",
+#                 shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+#                            c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+# 
+# texturesRed <- glcm(raster(mosaic_C3, layer=1), 
+#                     window = c(25, 25), 
+#                     statistics = "variance",
+#                     shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+#                                c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+# plot(texturesRed)
+# 
+# # Green band
+# texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
+#                       window = c(25, 25), 
+#                       statistics = "variance",
+#                       shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+#                                  c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+# c(0,1), c(1,1), c(1,0), c(1,-1)
+# plot(texturesGreen)
+# 
+# # Blue band
+# texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
+#                      window = c(25, 25), 
+#                      statistics = "variance",
+#                      shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+#                                 c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+# plot(texturesBlue)
+# 
+# # NIR band
+# texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
+#                     window = c(25, 25), 
+#                     statistics = "variance",
+#                     shift=list(c(2,-2), c(1,-2), c(1,-1), c(2,-1), c(1,0), 
+#                                c(2,0), c(0,1), c(1,1), c(2,1), c(0,2), c(1,2), c(2,2)))
+# plot(texturesNIR)
 
 
 
@@ -1925,3 +1942,22 @@ plot(texturesNIR)
 # 1.96 for a 95% confidence interval, or 1.645 for a 90% confidence interval.
 # See more here: http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
 # <- 1.96
+
+# # Change to long table
+# long_df_errt2 <- df_errt2 %>% gather(Classes, ErrorRate, IF_I:RA)
+
+# classesID <- c("IF-I", "IF-II", "IF-III", "FS", "NS", "RA")
+# RFC1 <- c("0.97", "0.62", "0.70", "0.33", "0.59", "0.66")
+# RFC5x5 <- c("0.98","0.60", "0.68", "0.32", "0.48", "0.64")
+# RFC15x15 <- c("0.97", "0.56", "0.59", "0.30", "0.44", "0.61")
+# RFC21x21 <- c("0.98", "0.58", "0.57", "0.28", "0.40", "0.64")
+# df_errt2 <- data.frame(classesID, RFC1, RFC5x5, RFC15x15, RFC21x21)
+# df_errt2$RFC1 <- as.numeric(df_errt2$RFC1) 
+# 
+# ggplot(df_errt3, aes(x= classesID, group = 1)) +
+#   geom_line(aes(y = "RFC1"), stat="identity",color="#8c510a", size=2, alpha=0.9, linetype=2) +
+#   geom_line(aes(y = "RFC5x5"), stat="identity",color="#d8b365", size=2, alpha=0.9, linetype=2) +
+#   theme_minimal() +
+#   theme(plot.title = element_text(hjust = 0.5)) +
+#   labs(title="Error rate by window size", 
+#        x="Error rate", y = "Window size")
