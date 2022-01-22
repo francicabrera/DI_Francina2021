@@ -42,6 +42,7 @@ library(ggsn) # visualisation
 library(cowplot) # to arrange inset maps
 
 
+
 ################################################################################
 # DATA HANDLING
 # 1. Load and prepare the data
@@ -925,28 +926,29 @@ ggsave("Map4b.png",
 
 # Map slums #1
 # Set the map's properties
-Map5_1 <- ggplot() +
-  ggRGB(mosaic_C3,
-        r = 3,
-        g = 2,
-        b = 1,
-        stretch = "lin",
-        ggLayer = TRUE) +
-  geom_tile(data = mapdf_slums,
-            aes(y=Latitude,
-                x=Longitude,
-                fill = factor(classID))) +
-  coord_equal() +
-  scale_fill_manual(name = 'Classes',
-                    values = c('white', 'white', 'white'),
-                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
-  theme(axis.ticks = element_blank(),
-        axis.text = element_blank(),
-        panel.grid.major = element_blank(),
-        panel.background = element_blank(),
-        legend.position = "none") +
-  labs(x="", 
-       y="") 
+# Map5_1 <- ggplot() +
+#   ggRGB(mosaic_C3,
+#         r = 3,
+#         g = 2,
+#         b = 1,
+#         stretch = "lin",
+#         ggLayer = TRUE) +
+#   geom_tile(data = mapdf_slums,
+#             aes(y=Latitude,
+#                 x=Longitude,
+#                 fill = factor(classID), alpha = 0.000000000000001)) +
+#   coord_equal() +
+#   scale_fill_manual(name = 'Classes',
+#                     values = c('white', 'white', 'white'),
+#                     labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+#   theme(axis.ticks = element_blank(),
+#         axis.text = element_blank(),
+#         panel.grid.major = element_blank(),
+#         panel.background = element_blank(),
+#         legend.position = "none") +
+#   labs(x="", 
+#        y="") 
+# Map5_1
 
 # Map slums #2
 # Set the map's properties
@@ -957,14 +959,14 @@ Map5_2 <- ggplot() +
         b = 1,
         stretch = "lin",
         ggLayer = TRUE) +
-  geom_tile(data = mapdf_slums,
+  geom_tile(data = mapdfST_slums,
             aes(y=Latitude,
                 x=Longitude,
                 fill = factor(classID))) +
   coord_equal() +
-  scale_fill_manual(name = 'Classes',
-                    values = c('red', 'red', 'red'),
-                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  scale_fill_manual(name = 'Class',
+                    values = c('#f5b85d', '#f5b85d', '#f5b85d'),
+                    labels = c('Informal Settlements')) +
   theme(legend.title = element_text(size = 15),
         legend.text = element_text(size = 12),
         legend.key = element_rect(fill = NA),
@@ -986,26 +988,113 @@ Map5_2 <- ggplot() +
         symbol = 10) 
 Map5_2
 
-# Combine the main map with the inset map.
-Map5 <- ggdraw() +
-  draw_plot(Map5_1, x = -0.27, y = 0) +
-  draw_plot(Map5_2, x = 0.21, y = - 0.009)
-
-Map5
+# # Combine the main map with the inset map.
+# Map5 <- ggdraw() +
+#   draw_plot(Map5_1, x = -0.27, y = 0) +
+#   draw_plot(Map5_2, x = 0.21, y = - 0.009)
+# 
+# Map5
 
 # Save the map
 ggsave("Map5.png",
        plot=Map5,
        dpi = 600)
 
+# Zoom
+Map5_2zoom <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdfST_slums,
+            aes(y=Latitude,
+                x=Longitude,
+                fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Class',
+                    values = c('#f5b85d', '#f5b85d', '#f5b85d'),
+                    labels = c('Informal Settlements')) +
+  # theme(legend.title = element_text(size = 15),
+  #       legend.text = element_text(size = 12),
+  #       legend.key = element_rect(fill = NA),
+  #       axis.ticks = element_blank(),
+  #       axis.text = element_blank(),
+  #       panel.grid.major = element_blank(),
+  #       panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  # coord_sf(xlim = c(405000, 405500), ylim = c(2046500, 2047000), expand = FALSE) +
+  # coord_sf(xlim = c(404000, 404500), ylim = c(2044000, 2044500), expand = FALSE) + # uncomment for Zoom2
+  coord_sf(xlim = c(406000, 406500), ylim = c(2045000, 2045500), expand = FALSE) + # uncomment for Zoom3
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
 
-# Error rate plot
+
+
+ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  # geom_tile(data = mapdfST_slums,
+  #           aes(y=Latitude,
+  #               x=Longitude,
+  #               fill = factor(classID))) +
+  #coord_equal() +
+  # scale_fill_manual(name = 'Class',
+  #                   values = c('#f5b85d', '#f5b85d', '#f5b85d'),
+  #                   labels = c('Informal Settlements')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank()) +
+  # labs(x="", 
+  #      y="") +
+  # # coord_sf(xlim = c(405000, 405500), ylim = c(2046500, 2047000), expand = FALSE) +
+  # # coord_sf(xlim = c(404000, 404500), ylim = c(2044000, 2044500), expand = FALSE) + # uncomment for Zoom2
+  coord_sf(xlim = c(406000, 406500), ylim = c(2045000, 2045500), expand = FALSE) + # uncomment for Zoom3
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright",
+                 x.min = 406000,
+                 x.max = 406500,
+                 y.min = 2045000,
+                 y.max = 2045500,) +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+
+
+
+
+
+# Error rate plots
+
 # Create data frame 
 Errate <- c("52.32", "49.01", "48.84")
 Wsize <- c("5x5", "15x15", "21x21")
 df_errt <- data.frame(Wsize, df_errt )
 df_errt$Errate <- as.numeric(df_errt$Errate) 
-
+# Create plot
 ggplot(df_errt, aes(x=reorder(Wsize, -Errate), y=Errate, group=1)) +
   geom_line(stat="identity",color="#f5b85d", size=2, alpha=0.9, linetype=2) +
   theme_minimal() +
@@ -1060,7 +1149,6 @@ dt1 <- data.table::as.data.table(RF1_imp, keep.rownames = "var") %>%
 dt1
 
 # Plot the graph
-
 Graph3a <- ggplot(data=dt1, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
   labs(title="RFC\n(spectral)", 
        x="", y = "") +
@@ -1083,7 +1171,6 @@ dt2 <- data.table::as.data.table(RF2_imp, keep.rownames = "var") %>%
   
 
 # Plot the graph
-
 Graph3b <- ggplot(data=dt2, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
   labs(title="RFC\n(spectral + texture)\n21 x 21", 
        x="", y = "") +
