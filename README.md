@@ -19,7 +19,8 @@ This document provides instructions to extract informal settlements using spectr
 The data is stored in an online github repository: https://github.com/francicabrera/DI_Francina2021.git
 
 Find the process in this path: Slum_detection/Slum_detection.html
-Or visit the rpubs publication: 
+
+Or visit the rpubs publication: https://rpubs.com/francicabrera/860501
 
 This code follows the process from:
 https://pages.cms.hu-berlin.de/EOL/gcg_eo/index.html
