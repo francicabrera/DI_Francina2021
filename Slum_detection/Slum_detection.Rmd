@@ -29,11 +29,14 @@ This document provides instructions to extract informal settlements using spectr
 The data is stored in an online github repository: https://github.com/francicabrera/DI_Francina2021.git
 
 This code follows the process from:
+
 https://pages.cms.hu-berlin.de/EOL/gcg_eo/index.html
+
 https://andrewmaclachlan.github.io/CASA0005repo/advanced-raster-analysis.html
 
 ## 1. Libraries
-### Install packages and load the required libraries
+
+#### Install packages and load the required libraries
 
 ```{r message=FALSE}
 ## Install packages and load the required libraries
@@ -167,6 +170,7 @@ As both raster show no signal of clouds, the masks wont be used. Therefore, we w
 
 #### Mosaic
 Let's create a mosaic out of the two scenes
+
 See more here: http://www.qgistutorials.com/en/docs/3/raster_mosaicing_and_clipping.html
 
 ```{r message=FALSE}
@@ -233,6 +237,7 @@ rC3_false <- stack(mosaic_C3$NIR, mosaic_C3$red, mosaic_C3$green) %>%
 ### 2.3. Training and Test samples
 
 The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
+
 The location of the informal settlements in the Distrito Nacional was obtained from: https://web.one.gob.do/publicaciones/2016/estudio-metodologia-para-la-identificacion-de-tugurios-en-el-distrito-nacional-censo-2010/
 
 Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225 and https://doi.org/10.1016/j.compenvurbsys.2011.11.001, the classification follows six classes:
@@ -376,7 +381,7 @@ dt1
 Graph3a <- ggplot(data=dt1, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
   labs(title="RFC\n(spectral)", 
        x="", y = "") +
-  geom_bar(stat="identity", fill='#f6e8c3', width=0.9) +
+  geom_bar(stat="identity", fill='#f6e8c3', width=0.5) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5)) +
   coord_flip()
@@ -603,7 +608,7 @@ dt2 <- data.table::as.data.table(RF2_imp, keep.rownames = "var") %>%
 Graph3b <- ggplot(data=dt2, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
   labs(title="RFC\n(spectral + texture)\n5 x 5", 
        x="", y = "") +
-  geom_bar(stat="identity", fill='#f6e8c3', width=0.9) +
+  geom_bar(stat="identity", fill='#f6e8c3', width=0.5) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5)) +
   coord_flip()
@@ -688,11 +693,6 @@ Let's plot some maps with the resulting classification
 
 ```{r}
 
-# Load zoom polygon
-zoomMap2 <- st_read(here("data","geo","zoom_Map2.shp")) %>% 
-  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
-  st_transform(.,32619)
-
 # Set the map's properties
 Map1 <- ggplot() +
   ggRGB(mosaic_C3,
@@ -708,10 +708,8 @@ Map1 <- ggplot() +
                      values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
                      labels = c('Informal Type I','Informal Type II', 'Informal Type III',
                                 'Formal', 'No-settlement', 'Roads and asphalt')) +
-  geom_sf(data = zoomMap2,
-         color = 'red') +
-  theme(legend.title = element_text(size = 15),
-        legend.text = element_text(size = 12),
+  theme(legend.title = element_text(size = 9),
+        legend.text = element_text(size = 6),
         legend.key = element_rect(fill = NA),
         legend.position= c(1.2, 0.62),
         axis.ticks = element_line(colour = "grey70", size = 0.2),
@@ -725,59 +723,81 @@ Map1 <- ggplot() +
                  transform = FALSE,
                  height = 0.01,
                  border.size = 0.5,
-                 location = "bottomleft") +
+                 location = "bottomleft",
+                 st.dist = 0.05) +
   north(data=trainC3,
         location= "topright",
         symbol = 10) 
 
 Map1
 
-# Save the map
-ggsave("Map1.png",
-       plot = Map1,
-       dpi = 600)
+# Uncomment to Save the map
+# ggsave("Map1.png",
+#        plot = Map1,
+#        dpi = 600)
 
 ```
 
 ### 4.2. Classification map
 #### Map with all predicted classes.
 
+##### Model 1. Spectral
 ```{r}
-
-# Map classification Model #1
-# convert raster in data frame
-mapVal <-  rasterToPoints(map)    
+# Map 3 - Classification maps
+  
+  # Map classification #1
+  # convert raster in data frame
+  mapVal <-  rasterToPoints(map)    
 mapdf <- data.frame(mapVal)
 colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
 
 
 # Set the map's properties
-Map2_1 <- ggplot() +
+Map3_1 <- ggplot() +
   geom_raster(data = mapdf,
               aes(y=Latitude,
                   x=Longitude,
                   fill = factor(classID))) +
   coord_equal() +
   scale_fill_manual(name = 'Classes',
-                     values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
-                     labels = c('Informal Type I','Informal Type II', 'Informal Type III',
-                                'Formal', 'No-settlement', 'Roads and asphalt')) +
-  theme(axis.ticks = element_blank(),
+                    values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                               'Formal', 'No-settlement', 'Roads and asphalt')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
         axis.text = element_blank(),
         panel.grid.major = element_blank(),
-        panel.background = element_blank(),
-        legend.position = "none") +
-  labs(x="", 
-       y="") 
+        panel.background = element_blank()) +
+  labs(title="Predicted Classification Map. RFC Spectral",
+       x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.02,
+                 border.size = 0.5,
+                 location = "bottomright",
+                 st.dist = 0.05) +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+Map3_1
+```
 
-# Map classification Model #2
+##### Model 2. Spectral + Texture
+
+```{r}
+# Map classification #2
 # convert raster in data frame 
 mapValST <-  rasterToPoints(mapST)    
 mapdfST <- data.frame(mapValST)
 colnames(mapdfST) <- c('Longitude', 'Latitude', 'classID')
 
 # Set the map's properties
-Map2_2 <- ggplot() +
+Map3_2 <- ggplot() +
   geom_raster(data = mapdfST,
               aes(y=Latitude,
                   x=Longitude,
@@ -794,7 +814,8 @@ Map2_2 <- ggplot() +
         axis.text = element_blank(),
         panel.grid.major = element_blank(),
         panel.background = element_blank()) +
-  labs(x="", 
+  labs(title="Predicted Classification Map. RFC Spectral + Texture",
+       x="", 
        y="") +
   ggsn::scalebar(data = trainC3,
                  dist = 0.5, 
@@ -802,27 +823,20 @@ Map2_2 <- ggplot() +
                  transform = FALSE,
                  height = 0.01,
                  border.size = 0.5,
-                 location = "bottomright") +
+                 location = "bottomright",
+                 st.dist = 0.05) +
   north(data=trainC3,
         location= "topright",
         symbol = 10) 
+Map3_2
 
-# Combine the main map with the inset map.
-Map2 <- ggdraw() +
-  draw_plot(Map2_1, x = -0.27, y = 0) +
-  draw_plot(Map2_2, x = 0.21, y = - 0.009)
-
-Map2
-
-# Save the map
-ggsave("Map2.png",
-       plot=Map2,
-       dpi = 600)
 
 ```
 
 ### 4.3. Informal settlements map
-#### Map with all predicted classes.
+#### Map with all predicted slum classes.
+
+##### Model 1. Spectral
 
 ```{r}
 # Map 4 - Slum maps (by type)
@@ -830,7 +844,7 @@ ggsave("Map2.png",
 # Map slums #1
 # Subset dataframe 
 mapdf_slums <- filter(mapdf, classID == '1' | classID == '2' | classID == '3')
-  
+
 # Set the map's properties
 Map4_1 <- ggplot() +
   ggRGB(mosaic_C3,
@@ -840,21 +854,40 @@ Map4_1 <- ggplot() +
         stretch = "lin",
         ggLayer = TRUE) +
   geom_tile(data = mapdf_slums,
-              aes(y=Latitude,
-                  x=Longitude,
-                  fill = factor(classID))) +
+            aes(y=Latitude,
+                x=Longitude,
+                fill = factor(classID))) +
   coord_equal() +
   scale_fill_manual(name = 'Classes',
                     values = c('#8c510a', '#d8b365', '#f6e8c3'),
                     labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
-  theme(axis.ticks = element_blank(),
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
         axis.text = element_blank(),
         panel.grid.major = element_blank(),
-        panel.background = element_blank(),
-        legend.position = "none") +
-  labs(x="", 
-       y="") 
+        panel.background = element_blank()) +
+  labs(title="Predicted Informal Settlements Classification Map. RFC Spectral", 
+       x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright",
+                 st.dist = 0.05) +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10)  
+Map4_1
+```
 
+##### Model 2. Spectral + Texture
+
+```{r}
 # Map slums #2
 # Subset dataframe 
 mapdfST_slums <- filter(mapdfST, classID == '1' | classID == '2' | classID == '3')
@@ -882,7 +915,8 @@ Map4_2 <- ggplot() +
         axis.text = element_blank(),
         panel.grid.major = element_blank(),
         panel.background = element_blank()) +
-  labs(x="", 
+  labs(title="Predicted Informal Settlements Classification Map. RFC Spectral + Texture",
+       x="", 
        y="") +
   ggsn::scalebar(data = trainC3,
                  dist = 0.5, 
@@ -890,22 +924,13 @@ Map4_2 <- ggplot() +
                  transform = FALSE,
                  height = 0.01,
                  border.size = 0.5,
-                 location = "bottomright") +
+                 location = "bottomright",
+                 st.dist = 0.05) +
   north(data=trainC3,
         location= "topright",
         symbol = 10) 
 
-# Combine the main map with the inset map.
-Map4 <- ggdraw() +
-  draw_plot(Map4_1, x = -0.27, y = 0) +
-  draw_plot(Map4_2, x = 0.21, y = - 0.009)
-
-Map4
-
-# Save the map
-ggsave("Map4b.png",
-       plot=Map4,
-       dpi = 600)
+Map4_2
 
 ```
 

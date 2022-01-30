@@ -1091,10 +1091,6 @@ ggplot() +
 
 
 
-
-
-
-
 # Error rate plots
 
 # Create data frame 
@@ -1197,11 +1193,9 @@ Graph3b
 
 
 
-
-
-
-
-
+# End of the code
+# ---
+ 
 
 
 
