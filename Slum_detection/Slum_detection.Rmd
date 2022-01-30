@@ -1,0 +1,911 @@
+---
+title: "Extracting urban informal settlements using machine learning"
+Repository: https://github.com/francicabrera/DI_Francina2021.git
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning=FALSE, collapse = TRUE)
+```
+
+### A pixel-based approach to classify informal Settlements in the Dominican Republic's capital using PlanetScope data.
+
+Author: Francina Cabrera Fermin
+
+CASA UCL 2021
+
+
+This document provides instructions to extract informal settlements using spectral and texture features from 3 metres resolution satellite scenes from PlanetScope. This project creates several Random Forest Classification model based on the spectral and gray level co-occurrence matrix (variance) values of satellite image pixels.
+
+#### Description of the data:
+1. Two PlanetScope Analytic Ortho scenes with 3 metres pixel resolution, along with their Unusable Data Masks (UDM). Taken on the 23/02/2021 23:20:17. Downloaded from: https://www.Planet.com
+2. Visually collected labelled training and assessment sample using VHR Google maps imagery.
+3. Distrito Nacional’s boundary (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic. Downloaded from: https://www.one.gob.do/informaciones-cartograficas/shapefiles
+4. Distrito Nacional’s circumscription 3 (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic. Downloaded from: https://www.one.gob.do/informaciones-cartograficas/shapefiles
+5. Dominican Republic’s provinces (.shp) collected in the 2010 Population Census by National Statistics Office of the Dominican Republic. Downloaded from: https://www.one.gob.do/informaciones-cartograficas/shapefiles
+
+The data is stored in an online github repository: https://github.com/francicabrera/DI_Francina2021.git
+
+This code follows the process from:
+https://pages.cms.hu-berlin.de/EOL/gcg_eo/index.html
+https://andrewmaclachlan.github.io/CASA0005repo/advanced-raster-analysis.html
+
+## 1. Libraries
+### Install packages and load the required libraries
+
+```{r message=FALSE}
+## Install packages and load the required libraries
+
+library(sf) # to read layers 
+library(tmap) # visualisation
+library(googledrive) # to load data from google drive 
+library(here) # file referencing 
+library(raster) # to work with rasters
+library(sp)
+library(GGally) # to combine maps in a single plot
+library(tidyverse) # data management
+library(ggplot2) # to make maps and graphics
+library(reshape2) # data management
+library(caret) # create data partition
+library(e1071) # to optimise the mtry parameter
+library(randomForest) # to build the classification model
+library(glcm) # to create GLCM model
+library(RStoolbox) # to perform PCA
+library(ggsn) # visualisation
+library(cowplot) # to arrange inset maps
+```
+
+
+## 2. Data handling
+#### Load and prepare the data
+
+### 2.1. Administrative boundaries
+
+```{r }
+# Dominican Republic Provinces (for visualisation only)
+provinces <- st_read(here("data","geo", "PROVCenso2010.shp")) %>% 
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+
+# Distrito Nacional's boundary (for visualisation only)
+dn_boundary <- st_read(here("data","geo","DN_boundary.shp")) %>%
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+
+# Distrito Nacional's circumscriptions (for visualisation only)
+dn_circ <- st_read(here("data","geo","DN_circumscriptions.shp")) %>%
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619) 
+
+# Circumscription 3
+c3_boundary <- st_read(here("data","geo","Circ3.shp")) %>% 
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+```
+
+### 2.2. PlanetScope scenes.
+
+```{r message=FALSE}
+# The images will be downloaded from Google Drive.
+# First scene:
+# Create a temporary file that will be substituted with the downloaded raster.
+temp49 <- tempfile(fileext = ".tif")
+# Download the raster with the file's id from Google Drive.
+dl49 <- drive_download(as_id("1ftQXEszRYiHfiCDkm1kJ3parha85569w"),
+                     path = temp49, overwrite = TRUE)
+# Create the raster stack
+raster49 <- stack(temp49)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster49) 
+
+# Second scene:
+# Create a temporary file that will be substituted with the downloaded raster.
+temp50 <- tempfile(fileext = ".tif")
+# Download the raster with the file's id from Google Drive.
+dl50 <- drive_download(as_id("1But-SQaZkdazRBNMUKXjocLyiD7GQkJL"),
+                       path = temp50, overwrite = TRUE)
+# Create the raster stack
+raster50 <- stack(temp50)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster50) 
+```
+```{r}
+# Quick look at the images by the different bands
+plot(raster49, main="PlanetScope Distrito Nacional Scene 1")
+plot(raster50, main="PlanetScope Distrito Nacional Scene 2")
+```
+
+
+#### Cloud Assessment
+
+PlanetScope provides Usable Data Masks (UDM) to assess the data quality of their images. See more here: https://developers.planet.com/docs/data/udm-2/
+Let's verify the appearance of pixels covered with clouds or shadow.
+
+```{r message=FALSE}
+# Create a temporary file that will be substituted with the downloaded UDM raster.
+temp49_mask <- tempfile(fileext = ".tif")
+# Download the UDM raster with the file's id from Google Drive.
+dl49_mask <- drive_download(as_id("18r619B2o98q1JHxtkSyPFArvVKqKcpev"),
+                            path = temp49_mask, overwrite = TRUE)
+# Create the raster stack
+raster49_mask <- stack(temp49_mask)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster49_mask)
+```
+##### Find the most frequent values using freq().
+
+Consider the meaning of 0 as “FALSE” or “NO”, 1 equals “TRUE” or “YES”. Or, 0: no cloud, 1: cloud; 0: no shadow, 1: shadow.
+See more here: https://pages.cms.hu-berlin.de/EOL/gcg_eo/02_data_quality.html
+
+```{r message=FALSE}
+freq(raster49_mask$cloud) 
+```
+
+Repeat the same process with the UDM raster from the second scene.
+
+```{r message=FALSE}
+# Create a temporary file that will be substituted with the downloaded raster.
+temp50_mask <- tempfile(fileext = ".tif")
+# Download the UDM raster with the file's id from Google Drive.
+dl50_mask <- drive_download(as_id("18HnyLNzhswsV2S3b1EokS5OHXKsesZ99"),
+                            path = temp50_mask, overwrite = TRUE)
+# Create the raster stack
+raster50_mask <- stack(temp50_mask)
+# Check the coordinate system is WGS 84 / UTM zone 19N,
+# if not use: %>% projectRaster(., crs=32619)
+crs(raster50_mask)
+# Find the most frequent values using freq().
+freq(raster50_mask$cloud) 
+```
+
+As both raster show no signal of clouds, the masks wont be used. Therefore, we will remain with the original scenes.
+
+#### Mosaic
+Let's create a mosaic out of the two scenes
+See more here: http://www.qgistutorials.com/en/docs/3/raster_mosaicing_and_clipping.html
+
+```{r message=FALSE}
+# Merge the two original scenes to create a mosaic using the function mosaic()
+raster_mosaic <- mosaic(raster49,
+                        raster50, 
+                        fun=mean, 
+                        tolerance=0.05, 
+                        filename="raster_mosaic", 
+                        overwrite=TRUE)
+# Quick look at the mosaic
+plot(raster_mosaic, main="Mosaic of PlanetScope scenes")
+
+# Crop the mosaic to the Distrito Nacional's boundary with crop()
+# This raster will be used for visualisation only.
+mosaic_DN <- crop(raster_mosaic, 
+                  dn_boundary, 
+                  filename="mosaicDN_crop", 
+                  overwrite=TRUE) %>%
+  mask(., dn_boundary)
+
+# Crop the mosaic to the Circumscription 3 (C3)'s boundary with crop()
+mosaic_C3 <- crop(raster_mosaic, 
+                  c3_boundary, 
+                  filename="mosaicC3_crop", 
+                  overwrite=TRUE) %>% 
+  mask(., c3_boundary)
+
+```
+
+Information on the Circumscription 3 (C3)'s raster stack. 
+
+```{r}
+extent(mosaic_C3) # extent
+ncell(mosaic_C3) # number of cells
+dim(mosaic_C3) # number of rows, columns, layers
+nlayers(mosaic_C3) # number of layers
+res(mosaic_C3) # xres, yres
+```
+
+##### Name the Bands based on where they sample the electromagnetic spectrum.
+
+```{r}
+# Mosaic
+names(raster_mosaic) <- c('blue', 'green', 'red', 'NIR') 
+# DN's mosaic
+names(mosaic_DN) <- c('blue', 'green', 'red', 'NIR') 
+# C3' mosaic
+names(mosaic_C3) <- c('blue', 'green', 'red', 'NIR')
+```
+
+##### Plot the data in true colours and false composite.
+
+```{r}
+# C3
+# true colour composite
+rC3_rgb <- stack(mosaic_C3$red, mosaic_C3$green, mosaic_C3$blue) %>% 
+  plotRGB(.,axes=TRUE, stretch="lin")
+# false colour composite
+rC3_false <- stack(mosaic_C3$NIR, mosaic_C3$red, mosaic_C3$green) %>% 
+  plotRGB(.,axes=TRUE, stretch="lin")
+```
+
+### 2.3. Training and Test samples
+
+The training data was collected digitally using a very high resolution (VHR) imagery as a reference: the Google maps terrain in QGIS.
+The location of the informal settlements in the Distrito Nacional was obtained from: https://web.one.gob.do/publicaciones/2016/estudio-metodologia-para-la-identificacion-de-tugurios-en-el-distrito-nacional-censo-2010/
+
+Following the classification for informal and formal settlements from: https://ieeexplore.ieee.org/document/6236225 and https://doi.org/10.1016/j.compenvurbsys.2011.11.001, the classification follows six classes:
+
+1. Informal settlements Type I: Slums with an irregular shape, high density of buildings, and where paved roads could be visually identified. Roofs: grey, brown, red, and white. Same building with varying colours.
+
+2. Informal settlements Type II: Slums with an irregular shape, high density of buildings, and undefined roads. Roofs: grey, brown, red, and white. Same building with varying colours.
+
+3. Informal settlements Type III: Slums with an irregular shape, high density of buildings, undefined roads, and proximity to hazardous elements (rivers or ravines). Roofs: grey, brown, red, and white. Same building with varying colours. Hazardous arrangement.
+
+4. Formal settlement: Settlements with regular shape, regular density of buildings and paved roads.
+
+5. Non-settlements: Bare ground, grassland, forest, water, parking lots and sports courts.
+
+6. Roads and asphalt: Paved roads.
+
+```{r}
+# Read training points.
+trainC3 <- st_read(here("data", "training_data","TrainingData_C3.shp")) %>% 
+  # Project to EPSG:32619.
+  st_transform(.,32619)
+# Quick look of the feature
+qtm(trainC3)
+crs(trainC3) # Check crs
+# Check how many data points per class are
+trainC3 %>% group_by(classID) %>% count()
+
+# Extract image values at training point locations
+trainC3.sp <- raster::extract(mosaic_C3, trainC3, sp=T)
+
+# Convert to data.frame 
+trainC3.df <- as.data.frame(trainC3.sp)
+```
+
+##### Create boxplots of reflectance grouped by land cover class.
+This will allow you to identify any outliers in the data.
+
+```{r}
+# Melt dataframe containing point id, classID, and 6 spectral bands
+spectra.df <- melt(trainC3.df, id.vars='classID', 
+                   measure.vars=c('blue', 'green', 'red', 'NIR'))
+
+# Create boxplots of spectral bands per class
+ggplot(spectra.df, aes(x=variable, y=value, color=classID)) +
+  geom_boxplot() +
+  theme_bw()
+```
+
+The function that we'll use to train the classification model expects the dependent variable to be of type factor.
+
+```{r}
+# Use as.factor() for conversion of the classID column.
+trainC3.df$classID <- as.factor(trainC3.df$classID) 
+str(trainC3.df) #allows you to see the classes of the variables (all numeric)
+
+# Include useful predictors.
+trainC3_df <- select(trainC3.df, -c("id", "class_name","circ_num","coords.x1","coords.x2"))
+
+# The classification model cannot deal with NoData (NA) values. Remove NAs from the data.frame.
+sum(is.na(trainC3_df)) # check how many values are null
+trainC3_df <- na.omit(trainC3_df)
+sum(is.na(trainC3_df))
+```
+
+Stratified random sampling helps us to validate the map using a sufficient amount of samples for each for the four classes
+
+See more about this here: https://stackoverflow.com/questions/20776887/stratified-splitting-the-data/30181396
+
+```{r}
+# createDataPartition does a stratified random split of the data.
+# Set a portion of the data aside for testing
+sample <- createDataPartition(trainC3_df$classID, p = .80, list = FALSE)
+train <- trainC3_df[sample,]
+test <- trainC3_df[-sample,]
+
+# Check how many data points are per class
+train %>% group_by(classID) %>% count()
+test %>% group_by(classID) %>% count()
+
+# Check the dimension of the objects
+dim(train)
+dim(test)
+
+```
+
+## 3. Data Classification
+
+This section creates a classification model using the spectral bands of the mosaic.
+
+This section follows the code from this source: https://pages.cms.hu-berlin.de/EOL/gcg_eo/05_machine_learning.html
+
+#### Now, we'll build two models. One with spectral data only and other fusing spectral and texture data.
+
+### 3.1. Model 1: Spectral data only.
+
+This part of the process uses the package: "e1071". We will optimise the mtry parameter.
+
+1. Number of trees (ntree): it is unnecessary to tune in the ntree, instead it is recommendednto set it to a large number and compare across multiple runs of the model.
+
+2. Number of variables (mtry): set the number of k-folds that will run to find the optimal parameter.
+
+Read more here: https://stats.stackexchange.com/questions/348245/do-we-have-to-tune-the-number-of-trees-in-a-random-forest
+
+Other sources: https://www.youtube.com/watch?v=v5Bmz2eMd7M
+
+```{r}
+# Define accuracy from 5-fold cross-validation as optimization measure
+cv <- tune.control(cross = 5) 
+
+# Use tune.randomForest to assess the optimal combination of ntree and mtry
+RF_modelC3.tune <- tune.randomForest(classID~., 
+                                     data = train, 
+                                     ntree=750, 
+                                     mtry=c(2:10), 
+                                     importance = TRUE,
+                                     tunecontrol = cv)
+
+# Store the best model in a new object for further use
+RF_modelC3 <- RF_modelC3.tune$best.model
+print(RF_modelC3)
+```
+```{r}
+# Check at which number of trees the model stabilises. 
+plot(RF_modelC3) 
+
+```
+
+#### 3.1.1. Variable Importance
+
+```{r}
+# Check which variables provide more information
+# Calculate variable importance with importance()
+RF1_imp <- importance(RF_modelC3, type = 1) # select type 1 for Mean decrease accuracy
+typeof(RF1_imp)
+# Convert to a a data table
+dt1 <- data.table::as.data.table(RF1_imp, keep.rownames = "var") %>% 
+  .[order(-MeanDecreaseAccuracy)]
+dt1
+
+# Plot the graph
+Graph3a <- ggplot(data=dt1, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
+  labs(title="RFC\n(spectral)", 
+       x="", y = "") +
+  geom_bar(stat="identity", fill='#f6e8c3', width=0.9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
+
+Graph3a
+```
+
+#### 3.1.2. Map of predicted classes
+Perform a classification of the image stack using the predict() function. 
+
+```{r}
+# Run predict() to store RF predictions
+map <- predict(mosaic_C3, RF_modelC3)
+
+# Plot raster
+plot(map)
+freq(map)
+
+# Uncomment to write classification to disk.
+# writeRaster(map, filename="predicted_map", datatype="INT1S", overwrite=T)
+```
+
+#### 3.1.3. Model Performance
+Area Adjusted Accuracy assessment calculated as in http://reddcr.go.cr/sites/default/files/centro-de-documentacion/olofsson_et_al._2014_-_good_practices_for_estimating_area_and_assessing_accuracy_of_land_change.pdf
+
+Code source: https://blogs.fu-berlin.de/reseda/area-adjusted-accuracies/
+
+```{r}
+# Extract the predictions from the model, using the test dataset
+predClass <- predict(RF_modelC3, test)
+
+# Use as.factor() for conversion of the classID column in the test dataset
+test_acc <- as.factor(test$classID) 
+
+# Build a contingency table of the counts at each combination of factor levels.
+# Rename the vectors accordingly.
+confmat <- table("pred" = predClass, "ref" = test_acc)
+
+# get number of pixels per class and convert in km²
+imgVal <- as.factor(getValues(map))
+# Remove NA values from the classified dataset 
+imgVal <- na.omit(imgVal)
+# Extract the number of classes
+nclass <- length(unique(train$classID))
+# Calculate the total area per class
+maparea <- sapply(1:nclass, function(x) sum(imgVal == x))
+# Transform area in km2
+maparea <- maparea * res(map)[1] ^ 2 / 1000000
+
+# total  map area
+A <- sum(maparea)
+# proportion of area mapped as class i
+W_i <- maparea / A
+# number of reference points per class
+n_i <- rowSums(confmat) 
+# population error matrix
+p <- W_i * confmat / n_i
+p[is.na(p)] <- 0
+
+# area estimation
+p_area <- colSums(p) * A
+# overall accuracy
+OA <- sum(diag(p))
+# producers accuracy
+PA <- diag(p) / colSums(p)
+# users accuracy
+UA <- diag(p) / rowSums(p)
+
+# gather results
+result <- matrix(c(p_area, PA * 100, UA * 100, c(OA * 100, rep(NA, nclass-1))), nrow = nclass)
+result <- round(result, digits = 2) 
+rownames(result) <- levels(as.factor(train$classID))
+colnames(result) <- c("km²","PA", "UA", "OA")
+class(result) <- "table"
+result
+```
+
+
+### 3.2. Model 2: Spectral + Texture features.
+
+#### 3.2.1. GLCM - Gray level co-occurrence matrix
+
+Now, we will add texture features to see if it improves the slum detection. 
+
+This code follows the methodology of: https://ieeexplore.ieee.org/document/7447704
+
+Code Source: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis.
+
+We'll calculate the GLCM for a 5 x 5 kernel or window size. To calculate for different kernel (15x15, 21x21,...), change the "window" parameter.
+
+```{r}
+# Calculate over all directions
+# Red band
+texturesRed <- glcm(raster(mosaic_C3, layer=1), 
+                         window = c(5,5), 
+                         statistics = "variance",
+                         shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
+plot(texturesRed)
+
+# Green band
+texturesGreen <- glcm(raster(mosaic_C3, layer=2), 
+                         window = c(5,5), 
+                         statistics = "variance",
+                         shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
+
+plot(texturesGreen)
+
+# Blue band
+texturesBlue <- glcm(raster(mosaic_C3, layer=3), 
+                          window = c(5,5), 
+                          statistics = "variance",
+                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
+plot(texturesBlue)
+
+# NIR band
+texturesNIR <- glcm(raster(mosaic_C3, layer=4), 
+                          window = c(5,5), 
+                          statistics = "variance",
+                          shift=list(c(0,1), c(1,1), c(1,0), c(1,-1)))
+plot(texturesNIR)
+```
+
+#### 3.2.2. Principal Component Analysis (PCA) of Texture Bands
+
+To decrease redundancy of texture bands and to determine the appropriate texture features, we will apply PCA to all texture images.
+
+The function rasterPCA() will calculate the PCA of our raster stack and will return a raster brick with multiple layers of PCA scores.
+
+Source code: https://zia207.github.io/geospatial-r-github.io/texture-analysis.html#texture-analysis
+
+```{r}
+# Stack the glcm layers of all bands
+mosaic_C3glcm <- stack(texturesRed, texturesGreen, texturesBlue, texturesNIR)
+
+# Develop a PCA model
+mosaic_C3glcm2 <- scale(mosaic_C3glcm)        # scale the data
+mosaic_C3glcm2[is.na(mosaic_C3glcm2)] <- 0  # define zero  all missing values
+mosaic_C3PCA <- rasterPCA(mosaic_C3glcm2, nComp=4)
+summary(mosaic_C3PCA$model)
+
+# Extract first 2 PCs from the model
+# Since, the first two PCs account for more of the variability of these textures (see standard deviation), we will extract these 2 components.
+# The values from these raster layers will be used as variables for our classification.
+PCA1 <- mosaic_C3PCA$map$PC1
+PCA2 <- mosaic_C3PCA$map$PC2
+
+# Stack into one raster.
+PC_glcm <- stack(PCA1, PCA2)
+
+# Stack with the original mosaic
+mosaic_C3ST <- stack(mosaic_C3, PC_glcm)
+```
+
+#### 3.2.4. Training data
+
+```{r}
+# Extract image values at training point locations
+trainC3.spGLCM <- raster::extract(PC_glcm, trainC3, sp=T)
+
+# Convert to data.frame 
+trainC3.dfGLCM <- as.data.frame(trainC3.spGLCM)
+
+# Merge spectral and glcm values
+trainC3.dfST <- merge(trainC3.df,trainC3.dfGLCM, by = "id")
+
+# Rename column classID.x as classID
+names(trainC3.dfST)[2] <- 'classID'
+
+# Use as.factor() for conversion of the classID column.
+trainC3.dfST$classID <- as.factor(trainC3.dfST$classID) 
+str(trainC3.dfST) # allows you to see the classes of the variables (all numeric)
+
+# Include only useful predictors in the model.
+trainC3_dfST <- select(trainC3.dfST, -c("id", "class_name.x","circ_num.x","coords.x1.x","coords.x2.x",
+                                    "classID.y","class_name.y","circ_num.y","coords.x1.y","coords.x2.y")) 
+# The RF algorithm cannot deal with NoData (NA) values. Remove NAs from the data.frame.
+sum(is.na(trainC3_dfST)) # check how many null values there are
+trainC3_dfST <- na.omit(trainC3_dfST)
+sum(is.na(trainC3_dfST))
+
+# Set a portion of the data aside for testing
+sampleST <- createDataPartition(trainC3_dfST$classID, p = .80, list = FALSE)
+trainST <- trainC3_dfST[sampleST,]
+testST <- trainC3_dfST[-sampleST,]
+
+# Check how many data points are per class
+trainST %>% group_by(classID) %>% count()
+testST %>% group_by(classID) %>% count()
+```
+
+#### 3.2.5. Random Forest Model (Spectral + Texture)
+
+```{r}
+# Define accuracy from 5-fold cross-validation as optimization measure
+cvST <- tune.control(cross = 5) 
+
+# Use tune.randomForest to assess the optimal combination of ntree and mtry
+RF_modelC3ST.tune <- tune.randomForest(classID~., 
+                                     data = trainST, 
+                                     ntree=750, 
+                                     mtry=c(2:10), 
+                                     importance = TRUE,
+                                     tunecontrol = cvST)
+
+# Store the best model in a new object for further use
+RF_modelC3ST <- RF_modelC3ST.tune$best.model
+print(RF_modelC3ST)
+```
+
+#### 3.2.6. Variable Importance
+
+```{r}
+# Calculate variable importance with importance()
+RF2_imp <- importance(RF_modelC3ST, type = 1) # select type 1 for Mean decrease accuracy
+typeof(RF2_imp)
+# Convert to a a data table
+dt2 <- data.table::as.data.table(RF2_imp, keep.rownames = "var") %>% 
+  .[order(-MeanDecreaseAccuracy)] %>% 
+  .[var == "PC1", var := "GLCM Red"] %>% # Rename GLCM variables 
+  .[var == "PC2", var := "GLCM Green"]
+  
+
+# Plot the graph
+Graph3b <- ggplot(data=dt2, aes(x= reorder(var, MeanDecreaseAccuracy), y = MeanDecreaseAccuracy)) +
+  labs(title="RFC\n(spectral + texture)\n5 x 5", 
+       x="", y = "") +
+  geom_bar(stat="identity", fill='#f6e8c3', width=0.9) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  coord_flip()
+
+Graph3b 
+```
+
+#### 3.2.7. Map of predicted classes
+Perform a classification of the image stack using the predict() function. 
+
+```{r}
+# Run predict() to store RF predictions
+mapST <- predict(mosaic_C3ST, RF_modelC3ST)
+
+# Plot raster
+plot(mapST)
+freq(mapST)
+
+# Uncomment to write classification to disk.
+# writeRaster(mapST, filename="predicted_mapST", datatype="INT1S", overwrite=T)
+```
+
+#### 3.2.8. Model Performance
+
+```{r}
+# Extract the predictions from the model, using the test dataset
+predClassST <- predict(RF_modelC3ST, testST)
+
+# Use as.factor() for conversion of the classID column in the test dataset
+test_accST <- as.factor(testST$classID) 
+
+# Build a contingency table of the counts at each combination of factor levels.
+# Rename the vectors accordingly.
+confmat_ST <- table("pred" = predClassST, "ref" = test_accST)
+
+# get number of pixels per class and convert in km²
+imgVal_ST <- as.factor(getValues(mapST))
+# Remove NA values from the classified dataset 
+imgVal_ST <- na.omit(imgVal_ST)
+# Extract the number of classes
+nclass_ST <- length(unique(trainST$classID))
+# Calculate the total area per class
+maparea_ST <- sapply(1:nclass_ST, function(x) sum(imgVal_ST == x))
+# Transform area in km2
+maparea_ST <- maparea_ST * res(mapST)[1] ^ 2 / 1000000
+
+# total  map area
+A_ST <- sum(maparea_ST)
+# proportion of area mapped as class i
+W_i_ST <- maparea_ST / A_ST
+# number of reference points per class
+n_i_ST <- rowSums(confmat_ST) 
+# population error matrix 
+p_ST <- W_i_ST * confmat_ST / n_i_ST
+p_ST[is.na(p_ST)] <- 0
+
+# area estimation
+p_area_ST <- colSums(p_ST) * A_ST
+# overall accuracy 
+OA_ST <- sum(diag(p_ST))
+# producers accuracy 
+PA_ST <- diag(p_ST) / colSums(p_ST)
+# users accuracy 
+UA_ST <- diag(p_ST) / rowSums(p_ST)
+
+
+# gather results
+result_ST <- matrix(c(p_area_ST, PA_ST * 100, UA_ST * 100, c(OA_ST * 100, rep(NA, nclass_ST-1))), nrow = nclass_ST)
+result_ST <- round(result_ST, digits = 2) 
+rownames(result_ST) <- levels(as.factor(trainST$classID))
+colnames(result_ST) <- c("km²", "PA", "UA", "OA")
+class(result_ST) <- "table"
+result_ST
+```
+
+## 4. Data Visualisation
+
+Let's plot some maps with the resulting classification
+
+### 4.1. Training data
+#### First, let's plot the training data over the PlanetScope mosaic.
+
+```{r}
+
+# Load zoom polygon
+zoomMap2 <- st_read(here("data","geo","zoom_Map2.shp")) %>% 
+  # Project to EPSG:32619. This is the projected coordinate system for the Dominican Republic.
+  st_transform(.,32619)
+
+# Set the map's properties
+Map1 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_sf(data = trainC3,
+          size = 0.4,
+           aes(color = factor(classID))) +
+  scale_color_manual(name = 'Classes',
+                     values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                     labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                                'Formal', 'No-settlement', 'Roads and asphalt')) +
+  geom_sf(data = zoomMap2,
+         color = 'red') +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        legend.position= c(1.2, 0.62),
+        axis.ticks = element_line(colour = "grey70", size = 0.2),
+        panel.grid.major = element_line(colour = "grey70", size = 0.2),
+        panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomleft") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+
+Map1
+
+# Save the map
+ggsave("Map1.png",
+       plot = Map1,
+       dpi = 600)
+
+```
+
+### 4.2. Classification map
+#### Map with all predicted classes.
+
+```{r}
+
+# Map classification Model #1
+# convert raster in data frame
+mapVal <-  rasterToPoints(map)    
+mapdf <- data.frame(mapVal)
+colnames(mapdf) <- c('Longitude', 'Latitude', 'classID')
+
+
+# Set the map's properties
+Map2_1 <- ggplot() +
+  geom_raster(data = mapdf,
+              aes(y=Latitude,
+                  x=Longitude,
+                  fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                     values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                     labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                                'Formal', 'No-settlement', 'Roads and asphalt')) +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        legend.position = "none") +
+  labs(x="", 
+       y="") 
+
+# Map classification Model #2
+# convert raster in data frame 
+mapValST <-  rasterToPoints(mapST)    
+mapdfST <- data.frame(mapValST)
+colnames(mapdfST) <- c('Longitude', 'Latitude', 'classID')
+
+# Set the map's properties
+Map2_2 <- ggplot() +
+  geom_raster(data = mapdfST,
+              aes(y=Latitude,
+                  x=Longitude,
+                  fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('#8c510a', '#d8b365', '#f6e8c3','#c7eae5','#5ab4ac','#01665e'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III',
+                               'Formal', 'No-settlement', 'Roads and asphalt')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+
+# Combine the main map with the inset map.
+Map2 <- ggdraw() +
+  draw_plot(Map2_1, x = -0.27, y = 0) +
+  draw_plot(Map2_2, x = 0.21, y = - 0.009)
+
+Map2
+
+# Save the map
+ggsave("Map2.png",
+       plot=Map2,
+       dpi = 600)
+
+```
+
+### 4.3. Informal settlements map
+#### Map with all predicted classes.
+
+```{r}
+# Map 4 - Slum maps (by type)
+
+# Map slums #1
+# Subset dataframe 
+mapdf_slums <- filter(mapdf, classID == '1' | classID == '2' | classID == '3')
+  
+# Set the map's properties
+Map4_1 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdf_slums,
+              aes(y=Latitude,
+                  x=Longitude,
+                  fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('#8c510a', '#d8b365', '#f6e8c3'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  theme(axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank(),
+        legend.position = "none") +
+  labs(x="", 
+       y="") 
+
+# Map slums #2
+# Subset dataframe 
+mapdfST_slums <- filter(mapdfST, classID == '1' | classID == '2' | classID == '3')
+
+# Set the map's properties
+Map4_2 <- ggplot() +
+  ggRGB(mosaic_C3,
+        r = 3,
+        g = 2,
+        b = 1,
+        stretch = "lin",
+        ggLayer = TRUE) +
+  geom_tile(data = mapdfST_slums,
+            aes(y=Latitude,
+                x=Longitude,
+                fill = factor(classID))) +
+  coord_equal() +
+  scale_fill_manual(name = 'Classes',
+                    values = c('#8c510a', '#d8b365', '#f6e8c3'),
+                    labels = c('Informal Type I','Informal Type II', 'Informal Type III')) +
+  theme(legend.title = element_text(size = 15),
+        legend.text = element_text(size = 12),
+        legend.key = element_rect(fill = NA),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.background = element_blank()) +
+  labs(x="", 
+       y="") +
+  ggsn::scalebar(data = trainC3,
+                 dist = 0.5, 
+                 dist_unit = "km",
+                 transform = FALSE,
+                 height = 0.01,
+                 border.size = 0.5,
+                 location = "bottomright") +
+  north(data=trainC3,
+        location= "topright",
+        symbol = 10) 
+
+# Combine the main map with the inset map.
+Map4 <- ggdraw() +
+  draw_plot(Map4_1, x = -0.27, y = 0) +
+  draw_plot(Map4_2, x = 0.21, y = - 0.009)
+
+Map4
+
+# Save the map
+ggsave("Map4b.png",
+       plot=Map4,
+       dpi = 600)
+
+```
+
